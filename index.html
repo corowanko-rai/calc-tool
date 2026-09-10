@@ -1063,6 +1063,67 @@
     margin-top:1px;
     white-space:nowrap;
   }
+  /* --- 複数本に分けて調製する場合 --- */
+  .bottle-notice{
+    font-size:12px;
+    line-height:1.6;
+    color:var(--accent-deep);
+    background:var(--accent-soft);
+    border:1px solid #bcd9cd;
+    border-radius:7px;
+    padding:8px 10px;
+    margin-bottom:10px;
+  }
+  .bottle-block{
+    border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:8px;
+    padding:8px 10px;
+    margin-bottom:8px;
+    background:#fdfcf9;
+  }
+  .bottle-head{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:4px;
+    padding-bottom:5px;
+    border-bottom:1px solid var(--line);
+  }
+  .bottle-no{
+    font-size:12.5px;
+    font-weight:700;
+    color:#fff;
+    background:var(--accent-deep);
+    padding:2px 8px;
+    border-radius:5px;
+  }
+  .bottle-days{
+    font-size:12px;
+    font-weight:700;
+    color:var(--ink);
+  }
+  .bottle-size{
+    margin-left:auto;
+    font-size:11.5px;
+    font-weight:700;
+    color:var(--accent-deep);
+    background:var(--accent-soft);
+    padding:3px 8px;
+    border-radius:10px;
+    white-space:nowrap;
+  }
+  .bottle-grand-total{
+    border-top:1.5px solid var(--accent-deep);
+    border-bottom:none;
+    margin-top:2px;
+    padding-top:8px;
+  }
+  .bottle-grand-total .label{
+    font-weight:700;
+    color:var(--ink);
+  }
+
   .result-hero{
     margin-top:10px;
     padding-top:12px;
@@ -2271,6 +2332,42 @@
   // ---------- 計算 & 結果描画 ----------
   const resultArea = document.getElementById('resultArea');
 
+  // ---------- 投薬瓶への分割 ----------
+  // 水剤瓶の規格（ml）。総量がこれを超える場合は複数本に分ける。
+  const BOTTLE_SIZES = [30, 60, 100, 150, 200];
+  const MAX_BOTTLE_ML = 200;
+
+  // 日数をn本に分ける。各本の日数差が最小になる整数配分を返す（例：15日→[8,7]、14日→[5,5,4]）
+  function splitDaysEvenly(days, n){
+    const base = Math.floor(days / n);
+    const rem = days % n;
+    const arr = [];
+    for(let i = 0; i < n; i++){
+      arr.push(base + (i < rem ? 1 : 0));
+    }
+    return arr;
+  }
+
+  // 各本が瓶の最大容量に収まる「最少本数」を決める。
+  // 1回量は変えずに日数で分けるので、各本の総量＝1回量×分割数×その本の日数。
+  function decideBottleSplit(perDoseMl, div, days){
+    for(let n = 1; n <= days; n++){
+      const dayParts = splitDaysEvenly(days, n);
+      if(dayParts.some(d => d <= 0)) continue; // 日数より多くは分けられない
+      const volumes = dayParts.map(d => Math.round(perDoseMl * div * d * 1000) / 1000);
+      if(volumes.every(v => v <= MAX_BOTTLE_ML + 1e-9)){
+        return { count: n, dayParts, volumes };
+      }
+    }
+    // 1日分ですら瓶に収まらない場合（極端な処方）は分割不能として返す
+    return null;
+  }
+
+  // その量が入る最小の瓶を選ぶ
+  function pickBottleSize(volume){
+    return BOTTLE_SIZES.find(b => volume <= b + 1e-9) || null;
+  }
+
   function renderResult(){
     const validDrugs = state.drugs.filter(d => d.perDay != null && !isNaN(d.perDay) && d.perDay > 0);
 
@@ -2311,30 +2408,96 @@
     const waterVolume = Math.round((finalTotal - sumDrugs) * 1000) / 1000;
     const needsWater = waterVolume > 1e-9; // 浮動小数点誤差を考慮し、実質0は「不要」扱い
 
+    // 投薬瓶への分割（総量が瓶の最大容量を超える場合は複数本に分ける）
+    const bottleSplit = decideBottleSplit(roundedPerDoseFixed, state.div, state.days);
+    const bottleCount = bottleSplit ? bottleSplit.count : 1;
+
     let html = '';
 
     html += `<div class="result-panel">
       <div class="result-title"><span>調製手順</span><span>${drugTotals.length}剤MIX / 分${state.div} / ${state.days}日分</span></div>`;
 
-    let cumulativeInResult = 0;
-    drugTotals.forEach((d,i)=>{
-      cumulativeInResult += d.total;
-      const subLabel = (i === 0) ? '' : `（薬剤量 ${formatNum(d.total)}ml）`;
-      html += `<div class="result-line">
-        <span class="label">${i+1}. ${escapeHtml(d.name)}（${formatNum(d.perDay)}ml/日）を入れる</span>
-        <span class="value">${formatNum(cumulativeInResult)} ml${subLabel ? `<span class="value-sub">${subLabel}</span>` : ''}</span>
+    if(bottleCount > 1 && bottleSplit){
+      // ===== 複数本に分けて調製する場合 =====
+      html += `<div class="bottle-notice">総量${formatNum(finalTotal)}mlのため <b>${bottleCount}本</b>に分けて調製します（1本あたり最大${MAX_BOTTLE_ML}ml）</div>`;
+
+      bottleSplit.dayParts.forEach((partDays, bi)=>{
+        const partTotal = bottleSplit.volumes[bi];
+        const partDrugs = drugTotals.map(d=>({
+          name: d.name,
+          perDay: d.perDay,
+          total: Math.round(d.perDay * partDays * 1000) / 1000
+        }));
+        const partSumDrugs = partDrugs.reduce((s,d)=>s+d.total, 0);
+        const partWater = Math.round((partTotal - partSumDrugs) * 1000) / 1000;
+        const partNeedsWater = partWater > 1e-9;
+        const bottle = pickBottleSize(partTotal);
+
+        html += `<div class="bottle-block">
+          <div class="bottle-head">
+            <span class="bottle-no">${bi+1}本目</span>
+            <span class="bottle-days">${partDays}日分</span>
+            <span class="bottle-size">${bottle ? bottle + 'ml瓶' : '規格外'}</span>
+          </div>`;
+
+        let cum = 0;
+        partDrugs.forEach((d,i)=>{
+          cum += d.total;
+          const subLabel = (i === 0) ? '' : `（薬剤量 ${formatNum(d.total)}ml）`;
+          html += `<div class="result-line">
+            <span class="label">${i+1}. ${escapeHtml(d.name)}（${formatNum(d.perDay)}ml/日）を入れる</span>
+            <span class="value">${formatNum(cum)} ml${subLabel ? `<span class="value-sub">${subLabel}</span>` : ''}</span>
+          </div>`;
+        });
+
+        html += `<div class="result-line">
+          <span class="label">水で賦形して総量</span>
+          <span class="value${partNeedsWater ? '' : ' value-plain'}">${formatNum(partTotal)} ml</span>
+        </div>`;
+
+        html += `<div class="result-line">
+          <span class="label">└ 加える水の量</span>
+          <span class="value${partWater < 0 ? '' : (partNeedsWater ? '' : ' value-plain')}">${partWater < 0 ? '⚠ 負値' : (partNeedsWater ? `${formatNum(partWater)} ml` : '不要（0ml）')}</span>
+        </div>`;
+
+        html += `</div>`;
+      });
+
+      html += `<div class="result-line bottle-grand-total">
+        <span class="label">全${bottleCount}本の合計</span>
+        <span class="value">${formatNum(finalTotal)} ml</span>
       </div>`;
-    });
 
-    html += `<div class="result-line">
-      <span class="label">水で賦形して総量</span>
-      <span class="value${needsWater ? '' : ' value-plain'}">${formatNum(finalTotal)} ml</span>
-    </div>`;
+    } else {
+      // ===== 1本で調製する場合（従来どおり） =====
+      let cumulativeInResult = 0;
+      drugTotals.forEach((d,i)=>{
+        cumulativeInResult += d.total;
+        const subLabel = (i === 0) ? '' : `（薬剤量 ${formatNum(d.total)}ml）`;
+        html += `<div class="result-line">
+          <span class="label">${i+1}. ${escapeHtml(d.name)}（${formatNum(d.perDay)}ml/日）を入れる</span>
+          <span class="value">${formatNum(cumulativeInResult)} ml${subLabel ? `<span class="value-sub">${subLabel}</span>` : ''}</span>
+        </div>`;
+      });
 
-    html += `<div class="result-line">
-      <span class="label">└ 加える水の量</span>
-      <span class="value${waterVolume < 0 ? '' : (needsWater ? '' : ' value-plain')}">${waterVolume < 0 ? '⚠ 負値' : (needsWater ? `${formatNum(waterVolume)} ml` : '不要（0ml）')}</span>
-    </div>`;
+      html += `<div class="result-line">
+        <span class="label">水で賦形して総量</span>
+        <span class="value${needsWater ? '' : ' value-plain'}">${formatNum(finalTotal)} ml</span>
+      </div>`;
+
+      html += `<div class="result-line">
+        <span class="label">└ 加える水の量</span>
+        <span class="value${waterVolume < 0 ? '' : (needsWater ? '' : ' value-plain')}">${waterVolume < 0 ? '⚠ 負値' : (needsWater ? `${formatNum(waterVolume)} ml` : '不要（0ml）')}</span>
+      </div>`;
+
+      const singleBottle = pickBottleSize(finalTotal);
+      if(singleBottle){
+        html += `<div class="result-line">
+          <span class="label">投薬瓶</span>
+          <span class="value value-plain">${singleBottle} ml瓶</span>
+        </div>`;
+      }
+    }
 
     html += `<div class="result-hero">
       <span class="h-label">1回服用量</span>
