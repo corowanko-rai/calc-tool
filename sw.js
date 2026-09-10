@@ -1,8 +1,13 @@
 // 水剤MIX調製計算 Service Worker
-// アプリ本体をキャッシュし、オフラインでも起動できるようにする。
-// defaults.json は更新を拾いたいので、常にネットワークを優先する。
+//
+// 方針:
+// - HTML本体と defaults.json は「ネットワーク優先」。更新をすぐ反映させるため。
+//   オフライン時のみキャッシュにフォールバックする。
+// - アイコンなど変化しないファイルは「キャッシュ優先」で高速起動。
+//
+// アプリを更新したらCACHE_NAMEの数字を上げること（古いキャッシュが自動で破棄される）。
 
-const CACHE_NAME = 'mix-calc-v1';
+const CACHE_NAME = 'mix-calc-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -18,7 +23,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(APP_SHELL))
       .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting()) // 一部取得に失敗してもインストールは進める
+      .catch(() => self.skipWaiting())
   );
 });
 
@@ -32,40 +37,49 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// ネットワーク優先（取れたらキャッシュも更新／失敗したらキャッシュを返す）
+function networkFirst(req) {
+  return fetch(req)
+    .then(res => {
+      if (res && res.status === 200) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => caches.match(req).then(cached => cached || caches.match('./index.html')));
+}
+
+// キャッシュ優先（無ければ取得してキャッシュ）
+function cacheFirst(req) {
+  return caches.match(req).then(cached => {
+    if (cached) return cached;
+    return fetch(req).then(res => {
+      if (res && res.status === 200) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    });
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return; // 外部リソースは介入しない
 
-  // 共有の初期設定は常に最新を取りに行く（取れなければキャッシュにフォールバック）
-  if (url.pathname.endsWith('/defaults.json')) {
-    event.respondWith(
-      fetch(req)
-        .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => caches.match(req))
-    );
-    return;
+  const path = url.pathname;
+  const isHtml = req.mode === 'navigate'
+    || path.endsWith('/')
+    || path.endsWith('.html');
+  const isJson = path.endsWith('.json');
+
+  if (isHtml || isJson) {
+    event.respondWith(networkFirst(req));
+  } else {
+    event.respondWith(cacheFirst(req));
   }
-
-  // それ以外はキャッシュ優先（オフラインでも即起動できる）。
-  // 裏でネットワークからも取得し、次回以降に新しい内容を反映する。
-  event.respondWith(
-    caches.match(req).then(cached => {
-      const network = fetch(req)
-        .then(res => {
-          if (res && res.status === 200 && res.type === 'basic') {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
 });

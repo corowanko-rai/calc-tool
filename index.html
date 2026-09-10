@@ -3028,8 +3028,34 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
 // file:// で開いた場合は登録できないので、その場合は静かに無視する。
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+
+      // 新しいバージョンが見つかったら、有効化された時点で自動リロードする。
+      // これをしないと、更新をアップロードしても古い画面が表示され続けることがある。
+      reg.addEventListener('updatefound', function () {
+        var newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function () {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            // 既存のSWがいる状態で新版がインストールされた＝更新あり
+            window.location.reload();
+          }
+        });
+      });
+
+      // 起動のたびに更新をチェックする
+      reg.update().catch(function () {});
+
+    }).catch(function () {
       /* 登録できなくてもアプリ自体は通常どおり動作する */
+    });
+
+    // 制御SWが切り替わったときも一度だけリロード（多重リロード防止付き）
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
     });
   });
 }
