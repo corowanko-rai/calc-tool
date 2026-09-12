@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>軟膏MIX調製計算</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a4a40">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --ink:#1c2b2e;
+  --ink-soft:#4b5d60;
+  --paper:#f6f4ee;
+  --panel:#ffffff;
+  --line:#dcd6c8;
+  --accent:#0f6b5c;
+  --accent-soft:#e3efe9;
+  --accent-deep:#0a4a40;
+  --warn:#b5482c;
+  --warn-soft:#f7e6e0;
+  --shortage:#b5482c;
+  --radius:10px;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0;padding:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-text-size-adjust:100%;
+}
+body{padding-bottom:32px;}
+.app{max-width:520px;margin:0 auto;}
+
+/* ---------- ヘッダ ---------- */
+header{
+  position:sticky;top:0;z-index:20;
+  background:var(--accent-deep);
+  color:#fff;
+  padding:12px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);
+}
+header h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.02em;}
+.header-right{display:flex;align-items:center;gap:8px;}
+.shortage-badge{
+  display:none;
+  background:#fff;color:var(--shortage);
+  font-size:11px;font-weight:700;
+  padding:3px 8px;border-radius:999px;
+  letter-spacing:.02em;
+}
+.shortage-badge.show{display:inline-block;}
+.settings-btn{
+  background:rgba(255,255,255,.14);
+  border:none;color:#fff;
+  width:34px;height:34px;border-radius:8px;
+  font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.settings-btn:active{background:rgba(255,255,255,.28);}
+
+/* ---------- セクション共通 ---------- */
+section{
+  background:var(--panel);
+  margin:10px 12px;
+  border-radius:var(--radius);
+  border:1px solid var(--line);
+  padding:14px;
+}
+.sec-title{
+  font-size:12.5px;font-weight:700;color:var(--ink-soft);
+  letter-spacing:.04em;margin:0 0 10px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+
+/* ---------- 薬剤入力 ---------- */
+.drug-row{
+  display:flex;gap:6px;align-items:center;margin-bottom:8px;
+}
+.drug-row input[type=text]{
+  flex:1 1 auto;min-width:0;
+  border:1px solid var(--line);border-radius:8px;
+  padding:9px 8px;font-size:14px;background:var(--paper);color:var(--ink);
+}
+.drug-row .amount-wrap{
+  display:flex;align-items:center;gap:2px;flex:0 0 auto;
+}
+.drug-row input[type=number]{
+  width:64px;border:1px solid var(--line);border-radius:8px;
+  padding:9px 6px;font-size:14px;font-family:var(--mono);text-align:right;
+  background:var(--paper);color:var(--ink);
+}
+.unit-g{font-size:13px;color:var(--ink-soft);}
+.drug-del{
+  flex:0 0 auto;width:30px;height:30px;border-radius:8px;
+  border:1px solid var(--line);background:#fff;color:var(--warn);
+  font-size:15px;cursor:pointer;line-height:1;
+}
+.drug-del:disabled{opacity:.25;cursor:default;}
+.preset-row{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px;}
+.preset-chip{
+  border:1px solid var(--line);background:var(--paper);
+  border-radius:999px;padding:5px 10px;font-size:12px;color:var(--ink-soft);
+  cursor:pointer;
+}
+.preset-chip:active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep);}
+.add-drug-btn{
+  width:100%;padding:9px;border-radius:8px;border:1px dashed var(--line);
+  background:transparent;color:var(--accent-deep);font-size:13.5px;font-weight:600;
+  cursor:pointer;margin-top:2px;
+}
+.add-drug-btn:disabled{opacity:.35;}
+
+.summary-line{
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;font-size:13.5px;color:var(--ink-soft);
+  font-family:var(--mono);
+}
+.summary-line b{color:var(--ink);font-weight:700;}
+
+/* ---------- 壺選択 ---------- */
+.jar-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;
+}
+.jar-tile{
+  position:relative;
+  border:1.5px solid var(--line);border-radius:10px;
+  background:var(--paper);
+  padding:10px 6px 8px;
+  text-align:center;
+  cursor:pointer;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:manipulation;
+  transition:background .1s,border-color .1s;
+}
+.jar-tile:active{background:var(--accent-soft);}
+.jar-tile.active{border-color:var(--accent);}
+.jar-tile.disabled{opacity:.35;pointer-events:none;}
+.jar-tile .jar-name{font-size:13px;font-weight:700;color:var(--ink);}
+.jar-tile .jar-cap{font-size:10.5px;color:var(--ink-soft);margin-top:1px;}
+.jar-tile .badge{
+  position:absolute;top:-8px;right:-6px;
+  background:var(--accent-deep);color:#fff;
+  min-width:22px;height:22px;border-radius:999px;
+  font-size:12px;font-weight:700;font-family:var(--mono);
+  display:none;align-items:center;justify-content:center;padding:0 4px;
+}
+.jar-tile .badge.show{display:flex;}
+.jar-tile .minus{
+  margin-top:6px;min-width:34px;height:30px;padding:0 6px;border-radius:6px;
+  border:1px solid var(--line);background:#fff;color:var(--ink-soft);
+  font-size:14px;line-height:1;cursor:pointer;
+  touch-action:manipulation;
+  position:relative;z-index:1;
+}
+.jar-tile .minus:active{background:var(--warn-soft);border-color:var(--warn);color:var(--warn);}
+.jar-tile.shortage-mode{border-color:var(--shortage);}
+
+.jar-actions{display:flex;gap:8px;}
+.btn{
+  flex:1;padding:11px;border-radius:9px;font-size:14px;font-weight:700;
+  cursor:pointer;border:none;letter-spacing:.02em;
+}
+.btn-primary{background:var(--accent-deep);color:#fff;}
+.btn-primary:active{background:var(--accent);}
+.btn-outline{background:#fff;border:1.5px solid var(--line);color:var(--ink-soft);}
+.btn-outline:active{background:var(--paper);}
+.btn-shortage{
+  width:100%;margin-top:8px;padding:9px;border-radius:9px;
+  border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);
+  font-size:13px;font-weight:700;cursor:pointer;
+}
+.btn-shortage.on{background:var(--shortage);border-color:var(--shortage);color:#fff;}
+
+/* ---------- 結果 ---------- */
+.result-empty{color:var(--ink-soft);font-size:13px;text-align:center;padding:14px 0;}
+.result-summary{
+  font-family:var(--mono);font-size:13px;color:var(--ink-soft);
+  display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--line);
+}
+.result-summary b{color:var(--ink);}
+.jar-card{
+  border:1px solid var(--line);border-radius:9px;margin-bottom:8px;overflow:hidden;
+}
+.jar-card.fraction{background:var(--accent-soft);}
+.jar-card.unused{background:#f2f0e9;opacity:.6;}
+.jar-card-head{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 10px;background:rgba(0,0,0,.03);font-size:13px;font-weight:700;
+}
+.jar-card-head .tag{
+  font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;
+  background:var(--accent);color:#fff;
+}
+.jar-card.fraction .jar-card-head .tag{background:var(--accent-deep);}
+.jar-card.unused .jar-card-head .tag{background:var(--ink-soft);}
+.jar-card-body{padding:8px 10px;}
+.jar-drug-line{
+  display:flex;justify-content:space-between;font-size:13.5px;
+  padding:3px 0;font-family:var(--mono);
+}
+.jar-drug-line .name{font-family:inherit;color:var(--ink-soft);}
+.jar-drug-line .amt{font-weight:700;}
+.per-note{font-size:11px;color:var(--ink-soft);margin-top:4px;}
+
+.warn-box{
+  background:var(--warn-soft);border:1px solid #e0b7a8;color:var(--warn);
+  border-radius:9px;padding:9px 11px;font-size:13px;margin-bottom:10px;font-weight:600;
+}
+.check-box{
+  margin-top:12px;padding-top:10px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--ink-soft);
+}
+.check-box .line{display:flex;justify-content:space-between;font-family:var(--mono);padding:2px 0;}
+.check-box .diff{color:var(--warn);font-weight:700;}
+
+.candidates{margin-top:10px;}
+.candidates summary{
+  font-size:12.5px;color:var(--accent-deep);font-weight:700;cursor:pointer;
+  padding:6px 0;
+}
+.candidate-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-top:6px;
+  font-size:12.5px;background:var(--paper);
+}
+.candidate-item button{
+  border:1px solid var(--accent);background:#fff;color:var(--accent-deep);
+  border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;
+}
+
+/* ---------- 設定モーダル ---------- */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;
+}
+.modal-overlay.show{display:flex;align-items:flex-end;justify-content:center;}
+.modal{
+  background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;
+  padding:16px;max-height:82vh;overflow-y:auto;
+}
+.modal h2{font-size:15px;margin:0 0 12px;}
+.modal-sub{font-size:12px;color:var(--ink-soft);margin:14px 0 6px;font-weight:700;}
+.inv-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:9px 4px;border-bottom:1px solid var(--line);font-size:14px;
+}
+.toggle{
+  width:42px;height:24px;border-radius:999px;background:var(--line);
+  position:relative;cursor:pointer;flex:0 0 auto;
+}
+.toggle.on{background:var(--accent);}
+.toggle .knob{
+  position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:999px;
+  background:#fff;transition:left .15s;
+}
+.toggle.on .knob{left:20px;}
+.preset-edit-row{display:flex;gap:6px;margin-bottom:6px;}
+.preset-edit-row input{
+  flex:1;border:1px solid var(--line);border-radius:7px;padding:7px 8px;font-size:13px;
+}
+.preset-edit-row button{
+  border:1px solid var(--line);background:#fff;color:var(--warn);border-radius:7px;
+  width:32px;font-size:14px;cursor:pointer;
+}
+.modal-close{
+  width:100%;margin-top:14px;padding:11px;border-radius:9px;border:none;
+  background:var(--accent-deep);color:#fff;font-weight:700;font-size:14px;cursor:pointer;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>軟膏MIX調製計算</h1>
+    <div class="header-right">
+      <span id="shortageBadge" class="shortage-badge">壺不足モード</span>
+      <button class="settings-btn" id="openSettings" aria-label="設定">⚙</button>
+    </div>
+  </header>
+
+  <!-- ① 処方 -->
+  <section>
+    <div class="sec-title">① 処方</div>
+    <div id="drugRows"></div>
+    <button class="add-drug-btn" id="addDrugBtn">＋ 薬剤を追加</button>
+    <div class="summary-line">
+      <span>総量 <b id="totalG">0.0</b> g</span>
+      <span>配合比 <b id="ratioText">—</b></span>
+    </div>
+  </section>
+
+  <!-- ② 壺の選択 -->
+  <section>
+    <div class="sec-title">
+      <span>② 壺の選択</span>
+    </div>
+    <div class="jar-grid" id="jarGrid"></div>
+    <div class="jar-actions">
+      <button class="btn btn-primary" id="optimizeBtn">最適化</button>
+      <button class="btn btn-outline" id="clearBtn">クリア</button>
+    </div>
+    <button class="btn-shortage" id="shortageToggleBtn">壺不足モード：OFF（タップで小容量壺を優先）</button>
+  </section>
+
+  <!-- ③ 結果 -->
+  <section>
+    <div class="sec-title">③ 結果</div>
+    <div id="resultArea"><div class="result-empty">薬剤量を入力し、壺を選択してください</div></div>
+  </section>
+</div>
+
+<!-- 設定モーダル -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>設定</h2>
+    <div class="modal-sub">壺の在庫</div>
+    <div id="invList"></div>
+    <div class="modal-sub">薬剤名プリセット</div>
+    <div id="presetEditList"></div>
+    <div class="preset-edit-row">
+      <input type="text" id="newPresetInput" placeholder="新しい薬剤名を追加">
+      <button id="addPresetBtn">＋</button>
+    </div>
+    <button class="modal-close" id="closeSettings">閉じる</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   ストレージ抽象レイヤ（window.storage が使えなければ localStorage）
+   ============================================================ */
+function withTimeout(promise, ms, fallbackValue) {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => { if (!done) { done = true; resolve(fallbackValue); } }, ms);
+    Promise.resolve(promise).then((v) => {
+      if (!done) { done = true; clearTimeout(timer); resolve(v); }
+    }).catch(() => {
+      if (!done) { done = true; clearTimeout(timer); resolve(fallbackValue); }
+    });
+  });
+}
+
+const Store = {
+  async get(key, fallback) {
+    try {
+      if (window.storage && window.storage.get) {
+        // window.storage が応答しない環境（一部プレビュー環境）でも
+        // 画面が固まらないよう、1.2秒でタイムアウトしてフォールバックする
+        const r = await withTimeout(window.storage.get(key, false), 1200, undefined);
+        if (r === undefined) throw new Error('storage timeout or miss');
+        return r ? JSON.parse(r.value) : fallback;
+      }
+    } catch (e) { /* キー未存在・タイムアウトなどは fallback */ }
+    try {
+      const v = localStorage.getItem(key);
+      return v !== null ? JSON.parse(v) : fallback;
+    } catch (e) { return fallback; }
+  },
+  async set(key, value) {
+    try {
+      if (window.storage && window.storage.set) {
+        const r = await withTimeout(window.storage.set(key, JSON.stringify(value), false), 1200, undefined);
+        if (r !== undefined) return true;
+      }
+    } catch (e) { /* fallthrough */ }
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e) { return false; }
+  }
+};
+
+/* ============================================================
+   コアロジック（仕様書 v1.3）
+   ============================================================ */
+const JARS = [
+  { id: 'J10',  label: '12g壺',  cap: 10  },
+  { id: 'J20',  label: '25g壺',  cap: 20  },
+  { id: 'J30',  label: '34g壺',  cap: 30  },
+  { id: 'J50',  label: '60g壺',  cap: 50  },
+  { id: 'J100', label: '120g壺', cap: 100 },
+];
+const UNIFORM_EXTRA_LIMIT = { normal: 1, shortage: 3 };
+
+function round1(x) {
+  return Math.round((x + (x >= 0 ? 1e-9 : -1e-9)) * 10) / 10;
+}
+
+// ---------- 単一種のみの壺構成を列挙 ----------
+function enumerateSingleType(T, allowedJars) {
+  return allowedJars.map(j => {
+    const n = Math.max(1, Math.ceil(round1(T) / j.cap - 1e-9));
+    const capacity = round1(n * j.cap);
+    const waste = round1(capacity - T);
+    return { composition: [{ id: j.id, label: j.label, cap: j.cap, count: n }], jars: n, capacity, waste, kind: 'uniform' };
+  });
+}
+
+// ---------- 異なる2種類を組み合わせた壺構成を列挙（各ペアにつき最良の1件） ----------
+function enumeratePairType(T, allowedJars) {
+  const results = [];
+  for (let a = 0; a < allowedJars.length; a++) {
+    for (let b = 0; b < allowedJars.length; b++) {
+      if (a === b) continue;
+      const j1 = allowedJars[a], j2 = allowedJars[b];
+      if (j1.cap <= j2.cap) continue; // j1>j2 の順に固定し、同じ組み合わせの重複探索を避ける
+
+      const maxN1 = Math.ceil(round1(T) / j1.cap) + 2;
+      let best = null;
+      for (let n1 = 1; n1 <= maxN1; n1++) {
+        const remain = round1(T - n1 * j1.cap);
+        if (remain <= 0) continue; // j1だけで足りる場合は単一種側でカバーされる
+        const n2 = Math.max(1, Math.ceil(remain / j2.cap - 1e-9));
+        const capacity = round1(n1 * j1.cap + n2 * j2.cap);
+        const waste = round1(capacity - T);
+        const jars = n1 + n2;
+        if (!best || waste < best.waste || (waste === best.waste && jars < best.jars)) {
+          best = {
+            composition: [
+              { id: j1.id, label: j1.label, cap: j1.cap, count: n1 },
+              { id: j2.id, label: j2.label, cap: j2.cap, count: n2 },
+            ],
+            jars, capacity, waste, kind: 'mixed',
+          };
+        }
+      }
+      if (best) results.push(best);
+    }
+  }
+  return results;
+}
+
+function compareByCapsDesc(a, b) {
+  const capsA = a.composition.map(c => c.cap).sort((x, y) => y - x);
+  const capsB = b.composition.map(c => c.cap).sort((x, y) => y - x);
+  const len = Math.max(capsA.length, capsB.length);
+  for (let i = 0; i < len; i++) {
+    const va = capsA[i] || 0, vb = capsB[i] || 0;
+    if (va !== vb) return vb - va;
+  }
+  return 0;
+}
+
+function sameComposition(a, b) {
+  if (a.length !== b.length) return false;
+  const key = arr => arr.map(x => x.cap + 'x' + x.count).sort().join(',');
+  return key(a) === key(b);
+}
+
+// 使用する壺の種類は最大2種類までに制限した最適化
+function optimizeJars(T, inventoryIds, shortageMode) {
+  const allowed = JARS.filter(j => inventoryIds.has(j.id));
+  if (allowed.length === 0) return { error: 'NO_INVENTORY' };
+  if (T <= 0) return { error: 'NO_AMOUNT' };
+
+  const allCandidates = enumerateSingleType(T, allowed).concat(enumeratePairType(T, allowed));
+
+  const wasteMin = Math.min(...allCandidates.map(c => c.waste));
+  const S = allCandidates.filter(c => c.waste === wasteMin);
+  const Nmin = Math.min(...S.map(c => c.jars));
+  const solMin = S.filter(c => c.jars === Nmin).sort(compareByCapsDesc)[0];
+
+  const limit = shortageMode ? UNIFORM_EXTRA_LIMIT.shortage : UNIFORM_EXTRA_LIMIT.normal;
+  const uniformInS = S.filter(c => c.kind === 'uniform' && c.jars <= Nmin + limit);
+
+  let final;
+  if (uniformInS.length > 0) {
+    final = shortageMode
+      ? uniformInS.reduce((a, b) => (b.jars > a.jars ? b : a))
+      : uniformInS.reduce((a, b) => (b.jars < a.jars ? b : a));
+  } else {
+    final = solMin;
+  }
+
+  let candidateB = null;
+  if (final.kind === 'uniform' && !sameComposition(final.composition, solMin.composition)) {
+    candidateB = solMin;
+  }
+
+  let candidateC = null;
+  const fewerJars = allCandidates.filter(c => c.jars < final.jars);
+  if (fewerJars.length > 0) {
+    fewerJars.sort((a, b) => a.jars - b.jars || a.waste - b.waste || compareByCapsDesc(a, b));
+    const best = fewerJars[0];
+    if (!sameComposition(best.composition, final.composition)) candidateC = best;
+  }
+
+  return { final, candidateB, candidateC };
+}
+
+function compositionFromManualSelection(jarCounts) {
+  const composition = JARS.filter(j => (jarCounts[j.id] || 0) > 0)
+    .map(j => ({ id: j.id, label: j.label, cap: j.cap, count: jarCounts[j.id] }))
+    .sort((a, b) => b.cap - a.cap);
+  const jars = composition.reduce((s, c) => s + c.count, 0);
+  const capacity = composition.reduce((s, c) => s + c.cap * c.count, 0);
+  return { composition, jars, capacity };
+}
+
+function assignFills(composition, T) {
+  // 容量ごとにグループ化し、容量降順に処理する
+  const groups = [...composition].sort((a, b) => b.cap - a.cap);
+  let rest = round1(T);
+  const result = [];
+  for (const g of groups) {
+    const groupCapTotal = round1(g.cap * g.count);
+    const fillTotal = round1(Math.min(groupCapTotal, Math.max(rest, 0)));
+
+    // このグループで実際に必要な本数（同容量壺は必要本数ぶんだけ均等に使う。
+    // 余った本数は0g＝未使用のまま残す）
+    let neededCount = 0;
+    if (fillTotal > 0) {
+      neededCount = Math.ceil(round1(fillTotal / g.cap) - 1e-9);
+      neededCount = Math.max(1, Math.min(g.count, neededCount));
+    }
+
+    const fills = new Array(g.count).fill(0);
+    if (neededCount > 0) {
+      const perJarBase = Math.floor((fillTotal / neededCount) * 10) / 10;
+      const distributed = round1(perJarBase * neededCount);
+      const remainder = round1(fillTotal - distributed);
+      const steps = Math.round(remainder / 0.1);
+      for (let i = 0; i < neededCount; i++) fills[i] = perJarBase;
+      for (let k = 0; k < steps; k++) fills[k % neededCount] = round1(fills[k % neededCount] + 0.1);
+    }
+
+    for (let i = 0; i < g.count; i++) {
+      const fill = fills[i];
+      result.push({ id: g.id, label: g.label, cap: g.cap, fill, isFraction: fill > 0 && fill < g.cap, unused: fill <= 0 });
+    }
+    rest = round1(rest - fillTotal);
+  }
+  const shortage = rest > 0 ? round1(rest) : 0;
+  return { instances: result, shortage };
+}
+
+function allocateDrugs(drugs, ratios, fill) {
+  const raw = ratios.map(r => fill * r);
+  let rounded = raw.map(r => round1(r));
+  let sum = round1(rounded.reduce((a, b) => a + b, 0));
+  let diff = round1(fill - sum);
+  if (diff !== 0) {
+    const deltas = rounded.map((r, i) => round1(r - raw[i]));
+    const idxs = drugs.map((_, i) => i);
+    idxs.sort((a, b) => {
+      const da = deltas[a], db = deltas[b];
+      let cmp = diff > 0 ? (da - db) : (db - da);
+      if (cmp !== 0) return cmp;
+      cmp = drugs[b].amount - drugs[a].amount;
+      if (cmp !== 0) return cmp;
+      return a - b;
+    });
+    const steps = Math.round(Math.abs(diff) / 0.1);
+    for (let k = 0; k < steps; k++) {
+      const idx = idxs[k % idxs.length];
+      rounded[idx] = round1(rounded[idx] + (diff > 0 ? 0.1 : -0.1));
+    }
+    sum = round1(rounded.reduce((a, b) => a + b, 0));
+  }
+  return { amounts: rounded, sum };
+}
+
+// 壺をまたいだ丸め誤差の解消。同容量壺グループ内の均等性を保つため、
+// count===1のグループのみを使って0.1g単位で調整する。
+function balanceAcrossGroups(drugs, groupRows) {
+  if (drugs.length < 2 || groupRows.length === 0) return groupRows;
+  const colTotal = (i) => round1(groupRows.reduce((s, g) => s + g.amounts[i] * g.count, 0));
+  const diffs = drugs.map((d, i) => round1(colTotal(i) - d.amount));
+  let guard = 0;
+  while (guard++ < 200) {
+    const overIdx = diffs.findIndex(d => d > 0.05);
+    const underIdx = diffs.findIndex(d => d < -0.05);
+    if (overIdx === -1 || underIdx === -1) break;
+    const target = groupRows.find(g => g.count === 1 && g.amounts[overIdx] >= 0.1 - 1e-9);
+    if (!target) break;
+    target.amounts[overIdx] = round1(target.amounts[overIdx] - 0.1);
+    target.amounts[underIdx] = round1(target.amounts[underIdx] + 0.1);
+    diffs[overIdx] = round1(diffs[overIdx] - 0.1);
+    diffs[underIdx] = round1(diffs[underIdx] + 0.1);
+  }
+  return groupRows;
+}
+
+function gcd(a, b) { return b < 1e-9 ? a : gcd(b, a % b); }
+
+/* ============================================================
+   アプリ状態
+   ============================================================ */
+const DEFAULT_PRESETS = ['ヒルドイドソフト','ワセリン','リンデロンVG','アンテベート','キンダベート','ヒルドイドローション','亜鉛華軟膏'];
+const MAX_DRUGS = 6;
+
+let state = {
+  drugs: [ { name: '', amount: null }, { name: '', amount: null } ],
+  inventory: { J10: true, J20: true, J30: true, J50: true, J100: true },
+  shortageMode: false,
+  presets: [...DEFAULT_PRESETS],
+  jarCounts: { J10: 0, J20: 0, J30: 0, J50: 0, J100: 0 },
+  lastResult: null,
+};
+
+/* ============================================================
+   永続化
+   ============================================================ */
+async function loadState() {
+  const inv = await Store.get('ontmix:inventory', null);
+  if (inv) state.inventory = inv;
+  const sm = await Store.get('ontmix:shortageMode', null);
+  if (sm !== null) state.shortageMode = sm;
+  const presets = await Store.get('ontmix:presets', null);
+  if (presets) state.presets = presets;
+}
+function saveInventory() { Store.set('ontmix:inventory', state.inventory); }
+function saveShortageMode() { Store.set('ontmix:shortageMode', state.shortageMode); }
+function savePresets() { Store.set('ontmix:presets', state.presets); }
+
+/* ============================================================
+   DOM参照
+   ============================================================ */
+const el = {
+  drugRows: document.getElementById('drugRows'),
+  addDrugBtn: document.getElementById('addDrugBtn'),
+  totalG: document.getElementById('totalG'),
+  ratioText: document.getElementById('ratioText'),
+  jarGrid: document.getElementById('jarGrid'),
+  optimizeBtn: document.getElementById('optimizeBtn'),
+  clearBtn: document.getElementById('clearBtn'),
+  shortageToggleBtn: document.getElementById('shortageToggleBtn'),
+  shortageBadge: document.getElementById('shortageBadge'),
+  resultArea: document.getElementById('resultArea'),
+  modalOverlay: document.getElementById('modalOverlay'),
+  openSettings: document.getElementById('openSettings'),
+  closeSettings: document.getElementById('closeSettings'),
+  invList: document.getElementById('invList'),
+  presetEditList: document.getElementById('presetEditList'),
+  newPresetInput: document.getElementById('newPresetInput'),
+  addPresetBtn: document.getElementById('addPresetBtn'),
+};
+
+/* ============================================================
+   薬剤入力の描画
+   ============================================================ */
+function drugDisplayName(d, idx) {
+  return d.name && d.name.trim() ? d.name.trim() : `薬剤${String.fromCharCode(65 + idx)}`;
+}
+
+function renderDrugRows() {
+  el.drugRows.innerHTML = '';
+  state.drugs.forEach((d, idx) => {
+    const wrap = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'drug-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = `薬剤名（${idx + 1}つ目）`;
+    nameInput.value = d.name || '';
+    nameInput.addEventListener('input', e => { d.name = e.target.value; recalc(); });
+
+    const amountWrap = document.createElement('div');
+    amountWrap.className = 'amount-wrap';
+    const amountInput = document.createElement('input');
+    amountInput.type = 'number';
+    amountInput.step = '0.1';
+    amountInput.min = '0';
+    amountInput.placeholder = '0';
+    amountInput.value = d.amount === null ? '' : d.amount;
+    amountInput.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      d.amount = isNaN(v) ? null : v;
+      recalc();
+    });
+    const unitSpan = document.createElement('span');
+    unitSpan.className = 'unit-g'; unitSpan.textContent = 'g';
+    amountWrap.appendChild(amountInput); amountWrap.appendChild(unitSpan);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'drug-del';
+    delBtn.textContent = '×';
+    delBtn.disabled = idx < 2;
+    delBtn.addEventListener('click', () => {
+      state.drugs.splice(idx, 1);
+      renderDrugRows(); recalc();
+    });
+
+    row.appendChild(nameInput); row.appendChild(amountWrap); row.appendChild(delBtn);
+    wrap.appendChild(row);
+
+    const presetRow = document.createElement('div');
+    presetRow.className = 'preset-row';
+    state.presets.forEach(p => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'preset-chip';
+      chip.textContent = p;
+      chip.addEventListener('click', () => { d.name = p; renderDrugRows(); recalc(); });
+      presetRow.appendChild(chip);
+    });
+    wrap.appendChild(presetRow);
+
+    el.drugRows.appendChild(wrap);
+  });
+  el.addDrugBtn.disabled = state.drugs.length >= MAX_DRUGS;
+}
+
+/* ============================================================
+   壺選択UIの描画
+   ============================================================ */
+function renderJarGrid() {
+  el.jarGrid.innerHTML = '';
+  JARS.forEach(j => {
+    const tile = document.createElement('div');
+    const hasStock = state.inventory[j.id];
+    tile.className = 'jar-tile' + (state.jarCounts[j.id] > 0 ? ' active' : '') + (hasStock ? '' : ' disabled');
+    if (state.shortageMode) tile.classList.add('shortage-mode');
+
+    const badge = document.createElement('div');
+    badge.className = 'badge' + (state.jarCounts[j.id] > 0 ? ' show' : '');
+    badge.textContent = state.jarCounts[j.id];
+
+    const name = document.createElement('div');
+    name.className = 'jar-name'; name.textContent = `${j.cap}g`;
+    const cap = document.createElement('div');
+    cap.className = 'jar-cap'; cap.textContent = j.label;
+
+    const minus = document.createElement('button');
+    minus.type = 'button'; minus.className = 'minus'; minus.textContent = '−';
+    // クリック(タップ)イベントで即座に反応させる。stopPropagationでタイル本体の+1と競合しないようにする。
+    minus.addEventListener('click', (e) => { e.stopPropagation(); decJar(j.id); });
+
+    tile.appendChild(badge); tile.appendChild(name); tile.appendChild(cap); tile.appendChild(minus);
+
+    // タイル本体タップで+1（clickイベントはpointerdown/upの競合や誤発火が起きにくく確実）
+    tile.addEventListener('click', () => incJar(j.id));
+
+    el.jarGrid.appendChild(tile);
+  });
+}
+function incJar(id) { if (!state.inventory[id]) return; state.jarCounts[id]++; renderJarGrid(); recalc(); }
+function decJar(id) { if (state.jarCounts[id] > 0) { state.jarCounts[id]--; renderJarGrid(); recalc(); } }
+
+/* ============================================================
+   計算・結果描画
+   ============================================================ */
+function getActiveDrugs() {
+  return state.drugs
+    .map((d, i) => ({ name: drugDisplayName(d, i), amount: d.amount, rawIdx: i }))
+    .filter(d => typeof d.amount === 'number' && d.amount > 0);
+}
+
+function updateSummary(drugs, T) {
+  el.totalG.textContent = round1(T).toFixed(1);
+  if (drugs.length < 2 || T <= 0) { el.ratioText.textContent = '—'; return; }
+  const amounts = drugs.map(d => Math.round(d.amount * 10));
+  let g = amounts.reduce((a, b) => gcd(a, b), amounts[0]);
+  g = g || 1;
+  const parts = amounts.map(a => a / g);
+  const allInt = parts.every(p => Number.isInteger(p));
+  el.ratioText.textContent = allInt ? parts.join(' : ') : drugs.map(d => d.amount.toFixed(1)).join(' : ');
+}
+
+function renderResult(payload) {
+  el.resultArea.innerHTML = '';
+
+  if (payload.type === 'empty') {
+    el.resultArea.innerHTML = '<div class="result-empty">薬剤量を入力し、壺を選択してください</div>';
+    return;
+  }
+  if (payload.type === 'no-inventory') {
+    el.resultArea.innerHTML = '<div class="warn-box">使用可能な壺がありません。設定で在庫を確認してください。</div>';
+    return;
+  }
+  if (payload.type === 'need-jars') {
+    el.resultArea.innerHTML = '<div class="result-empty">壺を選択するか「最適化」を押してください</div>';
+    return;
+  }
+
+  const { drugs, T, instances, shortage } = payload;
+
+  if (shortage > 0) {
+    const box = document.createElement('div');
+    box.className = 'warn-box';
+    box.textContent = `${shortage.toFixed(1)}g 入りきりません。壺を追加してください（不足 ${shortage.toFixed(1)}g）`;
+    el.resultArea.appendChild(box);
+  }
+  const unusedCount = instances.filter(i => i.unused).length;
+  if (unusedCount > 0) {
+    const box = document.createElement('div');
+    box.className = 'warn-box';
+    box.textContent = `${unusedCount}本が不要です（充填量0のため未使用）`;
+    el.resultArea.appendChild(box);
+  }
+
+  // サマリ
+  const usedInstances = instances.filter(i => !i.unused);
+  const totalCap = instances.reduce((s, i) => s + i.cap, 0);
+  const waste = round1(totalCap - T - shortage);
+  const summary = document.createElement('div');
+  summary.className = 'result-summary';
+  summary.innerHTML = `
+    <span>総量 <b>${round1(T).toFixed(1)}g</b></span>
+    <span>壺 <b>${instances.length}本</b></span>
+    <span>空白 <b>${Math.max(waste,0).toFixed(1)}g</b></span>
+  `;
+  el.resultArea.appendChild(summary);
+
+  // 壺別内訳（同一cap・同一fillはグルーピング）
+  const groups = [];
+  usedInstances.forEach(inst => {
+    let g = groups.find(g => g.cap === inst.cap && g.fill === inst.fill && g.isFraction === inst.isFraction);
+    if (!g) { g = { cap: inst.cap, fill: inst.fill, label: inst.label, isFraction: inst.isFraction, count: 0 }; groups.push(g); }
+    g.count++;
+  });
+  groups.sort((a, b) => b.cap - a.cap || b.fill - a.fill);
+
+  const ratios = drugs.map(d => d.amount / T);
+  const drugTotals = drugs.map(() => 0);
+
+  // 各グループの1本あたり配分を先に算出し、壺をまたいだ丸め誤差を解消してから描画する
+  groups.forEach(g => { g.amounts = allocateDrugs(drugs, ratios, g.fill).amounts; });
+  if (shortage <= 0) balanceAcrossGroups(drugs, groups);
+
+  groups.forEach(g => {
+    const card = document.createElement('div');
+    card.className = 'jar-card' + (g.isFraction ? ' fraction' : '');
+    const head = document.createElement('div');
+    head.className = 'jar-card-head';
+    const tagText = g.isFraction ? `端数 ${g.fill.toFixed(1)}g（空白${round1(g.cap-g.fill).toFixed(1)}g）` : '満杯';
+    head.innerHTML = `<span>${g.label}（最大${g.cap}g）× ${g.count}本</span><span class="tag">${tagText}</span>`;
+    card.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'jar-card-body';
+    drugs.forEach((d, i) => {
+      const line = document.createElement('div');
+      line.className = 'jar-drug-line';
+      line.innerHTML = `<span class="name">${d.name}</span><span class="amt">${g.amounts[i].toFixed(1)} g</span>`;
+      body.appendChild(line);
+      drugTotals[i] += g.amounts[i] * g.count;
+    });
+    if (g.count > 1) {
+      const note = document.createElement('div');
+      note.className = 'per-note';
+      note.textContent = '※ 上記は1本あたりの量です';
+      body.appendChild(note);
+    }
+    card.appendChild(body);
+    el.resultArea.appendChild(card);
+  });
+
+  if (unusedCount > 0) {
+    const card = document.createElement('div');
+    card.className = 'jar-card unused';
+    const unusedByType = {};
+    instances.filter(i => i.unused).forEach(i => { unusedByType[i.cap] = unusedByType[i.cap] || { label: i.label, count: 0 }; unusedByType[i.cap].count++; });
+    Object.entries(unusedByType).forEach(([cap, v]) => {
+      const head = document.createElement('div');
+      head.className = 'jar-card-head';
+      head.innerHTML = `<span>${v.label}（最大${cap}g）× ${v.count}本</span><span class="tag">未使用</span>`;
+      card.appendChild(head);
+    });
+    el.resultArea.appendChild(card);
+  }
+
+  // 検算欄
+  const check = document.createElement('div');
+  check.className = 'check-box';
+  let checkHtml = '';
+  drugs.forEach((d, i) => {
+    const diff = round1(drugTotals[i] - d.amount);
+    const diffText = diff !== 0 ? ` <span class="diff">(処方${d.amount.toFixed(1)}g, 差${diff > 0 ? '+' : ''}${diff.toFixed(1)}g)</span>` : '';
+    checkHtml += `<div class="line"><span>${d.name} 計</span><span>${round1(drugTotals[i]).toFixed(1)} g${diffText}</span></div>`;
+  });
+  const grandTotal = round1(drugTotals.reduce((a, b) => a + b, 0));
+  checkHtml += `<div class="line"><span><b>総計</b></span><span><b>${grandTotal.toFixed(1)} g</b></span></div>`;
+  check.innerHTML = checkHtml;
+  el.resultArea.appendChild(check);
+
+  // 代替候補
+  if (payload.candidateB || payload.candidateC) {
+    const details = document.createElement('details');
+    details.className = 'candidates';
+    const summaryEl = document.createElement('summary');
+    summaryEl.textContent = '▸ 他の候補を見る';
+    details.appendChild(summaryEl);
+    [payload.candidateB, payload.candidateC].forEach(c => {
+      if (!c) return;
+      const item = document.createElement('div');
+      item.className = 'candidate-item';
+      const compText = c.composition.map(x => `${x.label}×${x.count}`).join(' + ');
+      item.innerHTML = `<span>${compText}（${c.jars}本／空白${c.waste.toFixed(1)}g）</span>`;
+      const btn = document.createElement('button');
+      btn.textContent = 'この構成にする';
+      btn.addEventListener('click', () => {
+        state.jarCounts = { J10: 0, J20: 0, J30: 0, J50: 0, J100: 0 };
+        c.composition.forEach(x => { state.jarCounts[x.id] = x.count; });
+        renderJarGrid(); recalc();
+      });
+      item.appendChild(btn);
+      details.appendChild(item);
+    });
+    el.resultArea.appendChild(details);
+  }
+}
+
+function recalc() {
+  const drugs = getActiveDrugs();
+  const T = round1(drugs.reduce((s, d) => s + d.amount, 0));
+  updateSummary(drugs, T);
+
+  const totalJars = Object.values(state.jarCounts).reduce((a, b) => a + b, 0);
+
+  if (drugs.length === 0 || T <= 0) {
+    renderResult({ type: 'empty' });
+    return;
+  }
+  const hasInventory = Object.values(state.inventory).some(v => v);
+  if (!hasInventory) {
+    renderResult({ type: 'no-inventory' });
+    return;
+  }
+  if (totalJars === 0) {
+    renderResult({ type: 'need-jars' });
+    return;
+  }
+
+  const manualComp = compositionFromManualSelection(state.jarCounts);
+  const { instances, shortage } = assignFills(manualComp.composition, T);
+
+  // 最適化由来の候補も併記したい場合、最後の最適化結果を再利用
+  const opt = state.lastOptResult;
+  renderResult({
+    type: 'result', drugs, T, instances, shortage,
+    candidateB: opt ? opt.candidateB : null,
+    candidateC: opt ? opt.candidateC : null,
+  });
+}
+
+function runOptimize() {
+  const drugs = getActiveDrugs();
+  const T = round1(drugs.reduce((s, d) => s + d.amount, 0));
+  if (drugs.length === 0 || T <= 0) return;
+
+  const invSet = new Set(JARS.filter(j => state.inventory[j.id]).map(j => j.id));
+  const result = optimizeJars(T, invSet, state.shortageMode);
+  if (result.error) {
+    state.lastOptResult = null;
+    recalc();
+    return;
+  }
+  state.jarCounts = { J10: 0, J20: 0, J30: 0, J50: 0, J100: 0 };
+  result.final.composition.forEach(c => { state.jarCounts[c.id] = c.count; });
+  state.lastOptResult = result;
+  renderJarGrid();
+  recalc();
+}
+
+/* ============================================================
+   設定モーダル
+   ============================================================ */
+function renderInvList() {
+  el.invList.innerHTML = '';
+  JARS.forEach(j => {
+    const row = document.createElement('div');
+    row.className = 'inv-row';
+    const label = document.createElement('span');
+    label.textContent = `${j.label}（最大${j.cap}g）`;
+    const toggle = document.createElement('div');
+    toggle.className = 'toggle' + (state.inventory[j.id] ? ' on' : '');
+    toggle.innerHTML = '<div class="knob"></div>';
+    toggle.addEventListener('click', () => {
+      state.inventory[j.id] = !state.inventory[j.id];
+      if (!state.inventory[j.id]) state.jarCounts[j.id] = 0;
+      saveInventory();
+      renderInvList(); renderJarGrid(); recalc();
+    });
+    row.appendChild(label); row.appendChild(toggle);
+    el.invList.appendChild(row);
+  });
+}
+
+function renderPresetEditList() {
+  el.presetEditList.innerHTML = '';
+  state.presets.forEach((p, idx) => {
+    const row = document.createElement('div');
+    row.className = 'preset-edit-row';
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = p;
+    input.addEventListener('change', e => { state.presets[idx] = e.target.value; savePresets(); renderDrugRows(); });
+    const del = document.createElement('button');
+    del.textContent = '×';
+    del.addEventListener('click', () => { state.presets.splice(idx, 1); savePresets(); renderPresetEditList(); renderDrugRows(); });
+    row.appendChild(input); row.appendChild(del);
+    el.presetEditList.appendChild(row);
+  });
+}
+
+el.addPresetBtn.addEventListener('click', () => {
+  const v = el.newPresetInput.value.trim();
+  if (!v) return;
+  state.presets.push(v);
+  el.newPresetInput.value = '';
+  savePresets(); renderPresetEditList(); renderDrugRows();
+});
+
+el.openSettings.addEventListener('click', () => { el.modalOverlay.classList.add('show'); });
+el.closeSettings.addEventListener('click', () => { el.modalOverlay.classList.remove('show'); });
+el.modalOverlay.addEventListener('click', e => { if (e.target === el.modalOverlay) el.modalOverlay.classList.remove('show'); });
+
+/* ============================================================
+   イベント登録
+   ============================================================ */
+el.addDrugBtn.addEventListener('click', () => {
+  if (state.drugs.length >= MAX_DRUGS) return;
+  state.drugs.push({ name: '', amount: null });
+  renderDrugRows(); recalc();
+});
+el.optimizeBtn.addEventListener('click', runOptimize);
+el.clearBtn.addEventListener('click', () => {
+  state.jarCounts = { J10: 0, J20: 0, J30: 0, J50: 0, J100: 0 };
+  state.lastOptResult = null;
+  renderJarGrid(); recalc();
+});
+el.shortageToggleBtn.addEventListener('click', () => {
+  state.shortageMode = !state.shortageMode;
+  saveShortageMode();
+  updateShortageUI();
+  runOptimize(); // ON/OFF切替時は再最適化
+});
+
+function updateShortageUI() {
+  el.shortageToggleBtn.classList.toggle('on', state.shortageMode);
+  el.shortageToggleBtn.textContent = state.shortageMode
+    ? '壺不足モード：ON（小容量壺を優先中）'
+    : '壺不足モード：OFF（タップで小容量壺を優先）';
+  el.shortageBadge.classList.toggle('show', state.shortageMode);
+  renderJarGrid();
+}
+
+/* ============================================================
+   初期化
+   ============================================================ */
+(async function init() {
+  try {
+    // loadState 自体にも保険のタイムアウトをかける（二重の安全策）
+    await withTimeout(loadState(), 2000, undefined);
+  } catch (e) {
+    // 読み込みに失敗しても既定値で起動を続行する
+    console.warn('設定の読み込みに失敗したため既定値で起動します', e);
+  }
+  renderDrugRows();
+  renderJarGrid();
+  renderInvList();
+  renderPresetEditList();
+  updateShortageUI();
+  recalc();
+
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  } catch (e) {
+    // file://やサンドボックスプレビューなどSW登録不可の環境では無視して続行
+  }
+})();
+</script>
+</body>
+</html>
