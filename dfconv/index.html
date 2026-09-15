@@ -145,8 +145,31 @@
   .m-frow input[data-k="n"]{flex:3;min-width:0;}
   .m-frow select{flex:2;min-width:0;font-size:13px;padding:7px 6px;}
   .m-frow input[data-k="s"]{flex:1.3;min-width:0;}
-  .m-frow .u{font-size:11.5px;color:var(--ink-soft);width:38px;}
+  .m-frow .u{font-size:11px;color:var(--ink-soft);width:52px;flex:none;}
   .m-frow .x{color:var(--warn);font-weight:700;cursor:pointer;padding:0 4px;font-size:16px;}
+  .mlb{font-size:11px;color:var(--ink-soft);white-space:nowrap;flex:none;}
+  .m-sub{font-size:11px;color:var(--mute);margin:0 0 5px;line-height:1.45;}
+  .pred{margin-top:9px;font-size:12px;color:var(--accent-deep);background:var(--accent-soft);
+        border-radius:7px;padding:8px 9px;line-height:1.5;}
+  .pred .big{font-family:var(--mono);font-size:16px;font-weight:700;}
+  .pred .row2{display:flex;align-items:center;gap:8px;}
+  .pred .det{font-size:11px;color:var(--ink-soft);margin-top:3px;font-family:var(--mono);}
+  .pred .btn{width:auto;padding:5px 10px;font-size:11.5px;margin-left:auto;}
+  .grp-toggle{margin-top:8px;font-size:11.5px;font-weight:700;color:var(--accent);
+              border:1px dashed var(--line);border-radius:7px;padding:7px 9px;cursor:pointer;text-align:center;}
+  .grp{margin-top:6px;border:1px solid var(--line);border-radius:7px;padding:8px 9px;background:#fbfaf6;}
+  .grp .ghead{font-size:11px;color:var(--mute);margin-bottom:5px;}
+  .grp .gdrug{font-size:11.5px;font-weight:700;color:var(--ink-soft);margin:7px 0 2px;}
+  .grp .gdrug:first-of-type{margin-top:0;}
+  .grp .grow{display:flex;align-items:baseline;gap:8px;padding:2px 0;}
+  .grp .grow .n{flex:1;min-width:0;font-size:11.5px;}
+  .grp .grow .v{font-family:var(--mono);font-size:13px;font-weight:700;white-space:nowrap;}
+  .grp .grow .m{font-family:var(--mono);font-size:10.5px;color:var(--mute);white-space:nowrap;}
+  .g-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);}
+  .g-item .g-name{flex:1;font-size:13px;}
+  .g-item .g-name span{display:block;font-size:11px;color:var(--mute);}
+  .g-check{display:flex;align-items:center;gap:6px;font-size:12.5px;padding:4px 0;}
+  .g-check input{width:auto;}
   footer{text-align:center;font-size:11px;color:var(--mute);margin-top:16px;line-height:1.6;}
 </style>
 </head>
@@ -165,6 +188,7 @@
     <input type="number" class="num" id="weight" inputmode="decimal" step="0.1" min="0" placeholder="0">
     <div class="u">kg</div>
   </div>
+  <div id="predWrap"></div>
 </div>
 
 <div id="rpHost"></div>
@@ -198,6 +222,16 @@
         <button class="btn ghost small" id="mResetBtn" type="button">初期データに戻す</button>
       </div>
       <div id="mFormSlot"></div>
+    </div>
+    <div style="border-top:1px dashed var(--line);margin-top:11px;padding-top:11px;">
+      <span class="section-label">同薬効グループ</span>
+      <div class="m-sub">同じ体重での標準量を並べて比較できるグループです。</div>
+      <div id="groupList"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn ghost small" id="gAddBtn" type="button">＋ グループを追加</button>
+        <button class="btn ghost small" id="gResetBtn" type="button">初期データに戻す</button>
+      </div>
+      <div id="gFormSlot"></div>
     </div>
     <div style="border-top:1px dashed var(--line);margin-top:11px;padding-top:11px;">
       <span class="section-label">マスタの共有</span>
@@ -282,7 +316,8 @@ const DEFAULT_DRUGS = [
   k:'あもきししりん さわしりん わいどしりん', r:'amoxicillin sawacillin widecillin',
   dmin:20, dmax:40, dbasis:'day', maxDay:1000,
   dnote:'小児 20〜40mg(力価)/kg/日 分3〜4（中耳炎等では高用量を用いることがある）',
-  forms:[{n:'ワイドシリン細粒20%',t:'powder',s:200},{n:'サワシリン細粒10%',t:'powder',s:100},
+  forms:[{n:'ワイドシリン細粒20%',t:'powder',s:200},{n:'ワイドシリン細粒10%',t:'powder',s:100},
+         {n:'サワシリン細粒10%',t:'powder',s:100},
          {n:'サワシリン錠250',t:'tablet',s:250},
          {n:'サワシリンカプセル125',t:'cap',s:125},{n:'サワシリンカプセル250',t:'cap',s:250}]},
 
@@ -376,8 +411,15 @@ const TYPE_INFO = {
   supp:  {unit:'個',  label:'坐剤',           cont:false}
 };
 
+const DEFAULT_GROUPS = [
+  {id:'g_abx',   name:'抗菌薬',       ids:['clarithromycin','amoxicillin','cefditoren','cefcapene']},
+  {id:'g_resp',  name:'去痰・鎮咳',   ids:['carbo','ambroxol','tipepidine']},
+  {id:'g_aller', name:'抗アレルギー', ids:['fexofenadine','levocetirizine','epinastine','montelukast','pranlukast']},
+  {id:'g_anti',  name:'解熱鎮痛',     ids:['acetaminophen']}
+];
+
 /* ================= 保存 ================= */
-const LS_M='dfconv.master.v3', LS_S='dfconv.state.v4';
+const LS_M='dfconv.master.v3', LS_S='dfconv.state.v4', LS_G='dfconv.groups.v1';
 function lsGet(k){ try{return window.localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{window.localStorage.setItem(k,v);}catch(e){} }
 
@@ -388,6 +430,16 @@ let DRUGS=(function(){
   MASTER_IS_BUILTIN=true;
   return JSON.parse(JSON.stringify(DEFAULT_DRUGS));
 })();
+
+let GROUPS=(function(){
+  const raw=lsGet(LS_G);
+  if(raw){ try{const g=JSON.parse(raw); if(Array.isArray(g)) return g;}catch(e){} }
+  return JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+})();
+function saveGroups(){ lsSet(LS_G, JSON.stringify(GROUPS)); }
+function groupOf(drugId){
+  return GROUPS.find(function(g){ return (g.ids||[]).indexOf(drugId)>=0; })||null;
+}
 
 function newRp(){ return {mode:'reg', times:3, items:[]}; }
 let st={ weight:'', stepTab:0.5, recent:[], rps:[newRp()] };
@@ -488,6 +540,107 @@ function doseCheck(d, mgDay, mgDose, w){
   return {cls:'ok', text:'参考用量（'+range+'）内'};
 }
 
+/* ================= 予測体重 ================= */
+function doseMid(d){ return (d.dmin+((d.dmax!==undefined)?d.dmax:d.dmin))/2; }
+
+function weightEstimates(){
+  const out=[];
+  st.rps.forEach(function(rp){
+    rp.items.forEach(function(it){
+      const d=getDrug(it.drugId);
+      if(!d||!it.mg||it.mg<=0||d.dmin===undefined) return;
+      const times=rp.mode==='reg'?rp.times:1;
+      let base, unit;
+      if(d.dbasis==='dose'){ base=(rp.mode==='reg')?it.mg/times:it.mg; unit='mg/kg/回'; }
+      else{
+        if(rp.mode!=='reg') return;   // 頓用で1日量基準の用量は推定できない
+        base=it.mg; unit='mg/kg/日';
+      }
+      const a=base/d.dmin, b=base/((d.dmax!==undefined)?d.dmax:d.dmin);
+      out.push({name:d.name, lo:Math.min(a,b), hi:Math.max(a,b), unit:unit,
+                dose:(d.dmin===d.dmax?fmt(d.dmin,2):fmt(d.dmin,2)+'〜'+fmt(d.dmax,2))+unit});
+    });
+  });
+  return out;
+}
+function predictedWeight(){
+  const es=weightEstimates();
+  if(!es.length) return null;
+  let lo=-Infinity, hi=Infinity;
+  es.forEach(function(e){ lo=Math.max(lo,e.lo); hi=Math.min(hi,e.hi); });
+  const ok=(lo<=hi*1.0001);
+  const val=ok?((lo+hi)/2):(es.reduce(function(a,e){return a+(e.lo+e.hi)/2;},0)/es.length);
+  return {list:es, lo:lo, hi:hi, ok:ok, val:val};
+}
+function effectiveWeight(){
+  const w=num($('weight').value);
+  if(w&&w>0) return {w:w, src:'実体重'};
+  const p=predictedWeight();
+  if(p) return {w:Math.round(p.val*10)/10, src:'予測体重'};
+  return null;
+}
+function renderPred(){
+  const host=$('predWrap');
+  const p=predictedWeight();
+  if(!p){ host.innerHTML=''; return; }
+  const one=Math.abs(p.hi-p.lo)<0.05;
+  let h='<div class="pred"><div class="row2"><span>予測体重</span>';
+  if(p.ok){
+    h+='<span class="big">'+(one?fmt(p.lo,1):fmt(p.lo,1)+'〜'+fmt(p.hi,1))+' kg</span>';
+  }else{
+    h+='<span class="big">'+fmt(p.val,1)+' kg 前後</span>';
+  }
+  h+='<button class="btn small" type="button" id="predApply">体重に入れる</button></div>';
+  if(!p.ok) h+='<div class="det" style="color:var(--warn)">薬剤ごとに推定値が食い違っています</div>';
+  p.list.forEach(function(e){
+    h+='<div class="det">'+e.name+'　'+e.dose+' → '+
+       (Math.abs(e.hi-e.lo)<0.05?fmt(e.lo,1):fmt(e.lo,1)+'〜'+fmt(e.hi,1))+' kg</div>';
+  });
+  h+='<div class="det" style="color:var(--mute)">参考用量から逆算した目安です。</div></div>';
+  host.innerHTML=h;
+  const b=$('predApply');
+  if(b) b.addEventListener('click',function(){
+    $('weight').value=fmt(Math.round(p.val*10)/10,1);
+    st.weight=$('weight').value; saveState(); renderRps();
+  });
+}
+
+/* ================= 同薬効グループ ================= */
+function groupPanelHtml(rp, it, d){
+  const g=groupOf(it.drugId);
+  if(!g) return '';
+  let h='<div class="grp-toggle" data-grp="1">'+(it.grpOpen?'▲ ':'▼ ')+'同薬効グループ「'+g.name+'」の標準量</div>';
+  if(!it.grpOpen) return h;
+  const ew=effectiveWeight();
+  h+='<div class="grp">';
+  if(!ew){ h+='<div class="ghead">体重が分からないため計算できません</div></div>'; return h; }
+  const times=rp.mode==='reg'?rp.times:1;
+  h+='<div class="ghead">体重 '+fmt(ew.w,1)+'kg（'+ew.src+'）・'+
+     (rp.mode==='reg'?'分'+times+'／1日量':'1回量')+'で計算</div>';
+  (g.ids||[]).forEach(function(id){
+    const dd=getDrug(id); if(!dd) return;
+    h+='<div class="gdrug">'+dd.name+(dd.dmin!==undefined
+        ? '（'+(dd.dmin===dd.dmax?fmt(dd.dmin,2):fmt(dd.dmin,2)+'〜'+fmt(dd.dmax,2))+
+          (dd.dbasis==='dose'?'mg/kg/回':'mg/kg/日')+'）'
+        : '（参考用量が未設定）')+'</div>';
+    if(dd.dmin===undefined) return;
+    const mid=doseMid(dd);
+    let mgBase;
+    if(dd.dbasis==='dose') mgBase=(rp.mode==='reg')?mid*ew.w*times:mid*ew.w;
+    else mgBase=(rp.mode==='reg')?mid*ew.w:mid*ew.w/times;
+    const un=uName(dd), uf=uFactor(dd), per=rp.mode==='reg'?'／日':'／回';
+    dd.forms.forEach(function(f){
+      if(f.sr) return;
+      const pl=planFor(f, mgBase, rp.mode, times);
+      h+='<div class="grow"><div class="n">'+f.n+'</div>'+
+         '<div class="v">'+fmt(pl.val,2)+unitOf(f)+per+'</div>'+
+         '<div class="m">'+fmt(pl.mg/uf,3)+un+'</div></div>';
+    });
+  });
+  h+='</div>';
+  return h;
+}
+
 /* ================= Rp描画 ================= */
 function renderRps(){
   const host=$('rpHost'); host.innerHTML='';
@@ -550,6 +703,7 @@ function renderRps(){
     card.appendChild(add);
     host.appendChild(card);
   });
+  renderPred();
 }
 
 function buildItem(rp, ri, it, ii){
@@ -620,6 +774,9 @@ function buildItem(rp, ri, it, ii){
         saveState(); refresh();
       });
     });
+    const gt=res.querySelector('[data-grp]');
+    if(gt) gt.addEventListener('click',function(){ it.grpOpen=!it.grpOpen; saveState(); refresh(); });
+    renderPred();
   }
   refresh();
   return box;
@@ -663,6 +820,7 @@ function itemResultHtml(rp, it, d){
     h+='</div>';
   });
   h+='</div>';
+  h+=groupPanelHtml(rp, it, d);
   return h;
 }
 
@@ -788,21 +946,31 @@ function openDrugForm(index){
   const slot=$('mFormSlot'); slot.innerHTML='';
   const box=document.createElement('div'); box.className='m-form';
   box.innerHTML=
-    '<div class="fl">成分名（必須）</div><input type="text" data-f="name">'+
-    '<div class="fl">商品名</div><input type="text" data-f="brand">'+
+    '<div class="fl">一般名（必須）</div><input type="text" data-f="name">'+
+    '<div class="fl">先発名</div><input type="text" data-f="brand">'+
     '<div class="fl">検索用のよみ／ローマ字</div><input type="text" data-f="k" placeholder="ひらがな">'+
     '<input type="text" data-f="r" placeholder="romaji" style="margin-top:5px;">'+
-    '<div class="fl">成分量の単位</div><div class="m-frow"><select data-f="un">'+
+    '<div class="fl">成分量の単位</div>'+
+    '<div class="m-sub">計算結果の「成分量」をどの単位で表示するかです。</div>'+
+    '<div class="m-frow"><select data-f="un">'+
       '<option value="mg">mg</option><option value="mg(力価)">mg(力価)</option>'+
       '<option value="g">g</option><option value="μg">μg</option></select></div>'+
     '<div class="fl">参考用量メモ</div><input type="text" data-f="dnote">'+
-    '<div class="fl">用量チェック（任意）</div><div class="m-frow">'+
-      '<input type="number" class="num" data-f="dmin" placeholder="下限" step="0.01">'+
-      '<input type="number" class="num" data-f="dmax" placeholder="上限" step="0.01">'+
-      '<select data-f="dbasis"><option value="day">mg/kg/日</option><option value="dose">mg/kg/回</option></select>'+
-    '</div>'+
-    '<div class="m-frow"><input type="number" class="num" data-f="maxDay" placeholder="1日最大量 mg" step="0.1"></div>'+
-    '<div class="fl">剤形と含量</div><div id="mFormsHost"></div>'+
+    '<div class="fl">用量チェック・体重予測に使う数値（任意）</div>'+
+    '<div class="m-sub">入れておくと、処方が参考用量の範囲内かを自動判定し、処方量からの体重予測にも使われます。</div>'+
+    '<div class="m-frow"><span class="mlb">基準</span>'+
+      '<select data-f="dbasis"><option value="day">1日量（mg/kg/日）</option>'+
+      '<option value="dose">1回量（mg/kg/回）</option></select></div>'+
+    '<div class="m-frow"><span class="mlb">下限</span>'+
+      '<input type="number" class="num" data-f="dmin" placeholder="例 20" step="0.01">'+
+      '<span class="mlb">上限</span>'+
+      '<input type="number" class="num" data-f="dmax" placeholder="例 40" step="0.01">'+
+      '<span class="mlb">mg/kg</span></div>'+
+    '<div class="m-frow"><span class="mlb">1日最大量</span>'+
+      '<input type="number" class="num" data-f="maxDay" placeholder="例 1000" step="0.1">'+
+      '<span class="mlb">mg</span></div>'+
+    '<div class="fl">剤形と含量</div>'+
+    '<div class="m-sub">含量は1g・1mL・1錠あたりの成分量（mg）で入力します。</div><div id="mFormsHost"></div>'+
     '<button class="btn ghost small" id="mAddForm" type="button" style="margin-top:4px;">＋ 剤形を追加</button>'+
     '<div class="btn-row" style="margin-top:10px;">'+
       '<button class="btn" id="mSave" type="button">保存</button>'+
@@ -819,16 +987,21 @@ function openDrugForm(index){
     r.innerHTML='<input type="text" data-k="n" placeholder="製剤名">'+
       '<select data-k="t">'+Object.keys(TYPE_INFO).map(function(k){
         return '<option value="'+k+'">'+TYPE_INFO[k].label+'</option>';}).join('')+'</select>'+
-      '<input type="number" class="num" data-k="s" placeholder="mg" step="0.01">'+
+      '<input type="number" class="num" data-k="s" placeholder="含量" step="0.01">'+
       '<span class="u"></span><span class="x">×</span>';
     r.querySelector('[data-k="n"]').value=f.n||'';
     r.querySelector('[data-k="t"]').value=f.t||'powder';
     r.querySelector('[data-k="s"]').value=(f.s!==undefined?f.s:'');
     r.dataset.sr=f.sr?'1':''; r.dataset.note=f.note||'';
     const u=r.querySelector('.u');
-    const upd=function(){const t=r.querySelector('[data-k="t"]').value;
-      u.textContent='/'+(TYPE_INFO[t]?TYPE_INFO[t].unit:'');};
-    upd(); r.querySelector('[data-k="t"]').addEventListener('change',upd);
+    const upd=function(){
+      const t=r.querySelector('[data-k="t"]').value;
+      const mg=(box.querySelector('[data-f="un"]').value==='mg(力価)')?'mg力価':'mg';
+      u.textContent=mg+'/'+(TYPE_INFO[t]?TYPE_INFO[t].unit:'');
+    };
+    upd();
+    r.querySelector('[data-k="t"]').addEventListener('change',upd);
+    box.querySelector('[data-f="un"]').addEventListener('change',upd);
     r.querySelector('.x').addEventListener('click',function(){r.remove();});
     fh.appendChild(r);
   }
@@ -858,7 +1031,59 @@ function openDrugForm(index){
     if(a!==null){o.dmin=a;o.dmax=(b!==null?b:a);}
     if(m!==null)o.maxDay=m;
     if(index===-1)DRUGS.push(o); else DRUGS[index]=o;
-    saveMaster();slot.innerHTML='';renderMasterList();renderRps();toast('保存しました');
+    saveMaster();slot.innerHTML='';renderMasterList();renderGroupList();renderRps();toast('保存しました');
+  });
+}
+
+/* ================= グループ編集 ================= */
+function renderGroupList(){
+  const host=$('groupList'); host.innerHTML='';
+  if(!GROUPS.length){ host.innerHTML='<div class="empty">グループがありません</div>'; return; }
+  GROUPS.forEach(function(g,i){
+    const row=document.createElement('div'); row.className='g-item';
+    const nm=document.createElement('div'); nm.className='g-name';
+    const names=(g.ids||[]).map(function(id){const d=getDrug(id);return d?d.name:null;}).filter(Boolean);
+    nm.innerHTML='<strong>'+g.name+'</strong><span>'+(names.length?names.join('／'):'未設定')+'</span>';
+    const ed=document.createElement('div'); ed.className='m-act'; ed.textContent='編集';
+    ed.addEventListener('click',function(){openGroupForm(i);});
+    const dl=document.createElement('div'); dl.className='m-act del'; dl.textContent='削除';
+    dl.addEventListener('click',function(){
+      if(!window.confirm(g.name+' を削除しますか？'))return;
+      GROUPS.splice(i,1); saveGroups(); renderGroupList(); renderRps();
+    });
+    row.appendChild(nm);row.appendChild(ed);row.appendChild(dl);host.appendChild(row);
+  });
+}
+function openGroupForm(index){
+  const src = index===-1 ? {id:'g'+Date.now(), name:'', ids:[]}
+                         : JSON.parse(JSON.stringify(GROUPS[index]));
+  const slot=$('gFormSlot'); slot.innerHTML='';
+  const box=document.createElement('div'); box.className='m-form';
+  box.innerHTML='<div class="fl">グループ名（必須）</div><input type="text" id="gName">'+
+    '<div class="fl">含める薬剤</div><div id="gChecks"></div>'+
+    '<div class="btn-row" style="margin-top:10px;">'+
+      '<button class="btn" id="gSave" type="button">保存</button>'+
+      '<button class="btn ghost" id="gCancel" type="button">キャンセル</button></div>';
+  slot.appendChild(box);
+  box.querySelector('#gName').value=src.name||'';
+  const ch=box.querySelector('#gChecks');
+  DRUGS.forEach(function(d){
+    const l=document.createElement('label'); l.className='g-check';
+    const i=document.createElement('input'); i.type='checkbox'; i.value=d.id;
+    i.checked=(src.ids||[]).indexOf(d.id)>=0;
+    l.appendChild(i);
+    const sp=document.createElement('span'); sp.textContent=d.name+(d.brand?'（'+d.brand.split('／')[0]+'）':'');
+    l.appendChild(sp); ch.appendChild(l);
+  });
+  box.querySelector('#gCancel').addEventListener('click',function(){slot.innerHTML='';});
+  box.querySelector('#gSave').addEventListener('click',function(){
+    const name=box.querySelector('#gName').value.trim();
+    if(!name){toast('グループ名を入力してください');return;}
+    const ids=[];
+    ch.querySelectorAll('input:checked').forEach(function(i){ids.push(i.value);});
+    const o={id:src.id, name:name, ids:ids};
+    if(index===-1) GROUPS.push(o); else GROUPS[index]=o;
+    saveGroups(); slot.innerHTML=''; renderGroupList(); renderRps(); toast('保存しました');
   });
 }
 
@@ -895,7 +1120,7 @@ function exportMaster(){
   const now=new Date();
   const pad=function(n){return ('0'+n).slice(-2);};
   const stamp=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate());
-  const data={app:'dfconv', version:1, exportedAt:now.toISOString(), drugs:DRUGS};
+  const data={app:'dfconv', version:1, exportedAt:now.toISOString(), drugs:DRUGS, groups:GROUPS};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -911,7 +1136,17 @@ function pickDrugs(obj){
   return null;
 }
 
-function showImportChoice(list, label){
+function validGroups(arr){
+  if(!Array.isArray(arr)) return null;
+  const out=[];
+  arr.forEach(function(g){
+    if(!g||typeof g.name!=='string'||!g.name.trim()) return;
+    out.push({id:String(g.id||('g'+Math.random().toString(36).slice(2))),
+              name:g.name, ids:Array.isArray(g.ids)?g.ids.map(String):[]});
+  });
+  return out.length?out:null;
+}
+function showImportChoice(list, label, groups){
   const slot=$('mImportSlot'); slot.innerHTML='';
   const box=document.createElement('div'); box.className='m-form';
   const dup=list.filter(function(d){
@@ -929,17 +1164,24 @@ function showImportChoice(list, label){
   box.querySelectorAll('button').forEach(function(b){
     b.addEventListener('click',function(){
       const a=b.dataset.a;
-      if(a==='rep'){ DRUGS=list; toast('置き換えました'); }
+      if(a==='rep'){ DRUGS=list; if(groups){GROUPS=groups; saveGroups();} toast('置き換えました'); }
       else if(a==='add'){
         let n=0;
         list.forEach(function(d){
           if(DRUGS.some(function(x){ return x.id===d.id||x.name===d.name; })) return;
           DRUGS.push(d); n++;
         });
+        if(groups){
+          groups.forEach(function(g){
+            if(GROUPS.some(function(x){return x.id===g.id||x.name===g.name;})) return;
+            GROUPS.push(g);
+          });
+          saveGroups();
+        }
         toast(n?n+'成分を追加しました':'追加するものがありませんでした');
       }
       slot.innerHTML='';
-      if(a!=='no'){ MASTER_IS_BUILTIN=false; saveMaster(); renderMasterList(); renderRps(); }
+      if(a!=='no'){ MASTER_IS_BUILTIN=false; saveMaster(); renderMasterList(); renderGroupList(); renderRps(); }
     });
   });
 }
@@ -955,10 +1197,13 @@ function fetchDefaults(silent){
   }).then(function(j){
     const list=pickDrugs(j);
     if(!list) throw new Error('bad format');
+    const gs=validGroups(j&&j.groups);
     if(silent){
-      DRUGS=list; MASTER_IS_BUILTIN=false; saveMaster(); renderRps();
+      DRUGS=list; MASTER_IS_BUILTIN=false; saveMaster();
+      if(gs){ GROUPS=gs; saveGroups(); }
+      renderRps();
     }else{
-      showImportChoice(list,'配布マスタ（defaults.json）');
+      showImportChoice(list,'配布マスタ（defaults.json）',gs);
     }
     return true;
   }).catch(function(){
@@ -983,13 +1228,19 @@ $('sheet').addEventListener('click',function(e){ if(e.target===this) closePicker
 $('cfgToggle').addEventListener('click',function(){
   const p=$('cfgPanel'); p.classList.toggle('open');
   this.textContent=p.classList.contains('open')?'閉じる':'開く';
-  if(p.classList.contains('open')) renderMasterList();
+  if(p.classList.contains('open')){ renderMasterList(); renderGroupList(); }
 });
 $('mAddBtn').addEventListener('click',function(){openDrugForm(-1);});
 $('mResetBtn').addEventListener('click',function(){
   if(!window.confirm('薬剤マスタを初期データに戻します。よろしいですか？'))return;
   DRUGS=JSON.parse(JSON.stringify(DEFAULT_DRUGS));
   saveMaster();renderMasterList();renderRps();toast('初期データに戻しました');
+});
+$('gAddBtn').addEventListener('click',function(){openGroupForm(-1);});
+$('gResetBtn').addEventListener('click',function(){
+  if(!window.confirm('グループを初期データに戻します。よろしいですか？'))return;
+  GROUPS=JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+  saveGroups(); renderGroupList(); renderRps(); toast('初期データに戻しました');
 });
 $('mExport').addEventListener('click',exportMaster);
 $('mImport').addEventListener('click',function(){ $('mFile').value=''; $('mFile').click(); });
@@ -998,10 +1249,10 @@ $('mFile').addEventListener('change',function(){
   const f=this.files&&this.files[0]; if(!f) return;
   const rd=new FileReader();
   rd.onload=function(){
-    let list=null;
-    try{ list=pickDrugs(JSON.parse(rd.result)); }catch(e){}
+    let list=null, gs=null;
+    try{ const j=JSON.parse(rd.result); list=pickDrugs(j); gs=validGroups(j&&j.groups); }catch(e){}
     if(!list){ toast('読み込めるマスタが入っていません'); return; }
-    showImportChoice(list, f.name);
+    showImportChoice(list, f.name, gs);
   };
   rd.readAsText(f);
 });
