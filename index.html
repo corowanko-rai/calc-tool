@@ -1,5 +1,11 @@
 <!DOCTYPE html>
 <html lang="ja">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="調剤ツール">
+<meta name="theme-color" content="#0f6b5c">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
@@ -208,6 +214,13 @@ footer{
 footer a{ color:var(--ink-faint); }
 </style>
 </head>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+</script>
 <body>
 <div class="wrap">
   <header>
