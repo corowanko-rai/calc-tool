@@ -1,18 +1,19 @@
 {
+  "id": "./",
   "name": "調剤サポートツール",
   "short_name": "調剤ツール",
-  "description": "水剤MIX・軟膏MIX・剤形変更換算をまとめた入口ページ",
+  "description": "水剤MIX・軟膏ツボ選択・剤形変更換算をまとめた入口ページ",
   "start_url": "./",
-  "scope": "/",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f6f4ee",
   "theme_color": "#0f6b5c",
   "lang": "ja",
   "icons": [
-    {"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-    {"src":"/icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
-    {"src":"/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
+    {"src":"icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
   ]
 }
