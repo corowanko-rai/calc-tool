@@ -1,0 +1,730 @@
+{
+  "app": "calcTool",
+  "version": 1,
+  "note": "水剤MIX調製計算 / 剤形変更換算 共通の薬剤マスタ",
+  "drugs": [
+    {
+      "id": "carbo",
+      "name": "カルボシステイン",
+      "brand": "ムコダイン",
+      "k": "かるぼしすていん むこだいん",
+      "r": "carbocisteine mucodyne",
+      "dmin": 30,
+      "dmax": 30,
+      "dbasis": "day",
+      "maxDay": 1500,
+      "toleranceKg": 5,
+      "dnote": "小児 1回10mg/kg 1日3回（成人1500mg/日 分3）",
+      "forms": [
+        {
+          "n": "ムコダインDS50%",
+          "t": "powder",
+          "s": 500
+        },
+        {
+          "n": "ムコダインシロップ5%",
+          "t": "liquid",
+          "s": 50
+        },
+        {
+          "n": "ムコダイン錠250mg",
+          "t": "tablet",
+          "s": 250
+        },
+        {
+          "n": "ムコダイン錠500mg",
+          "t": "tablet",
+          "s": 500
+        }
+      ]
+    },
+    {
+      "id": "ambroxol",
+      "name": "アンブロキソール",
+      "brand": "ムコソルバン",
+      "k": "あんぶろきそーる むこそるばん",
+      "r": "ambroxol mucosolvan",
+      "dmin": 0.9,
+      "dmax": 0.9,
+      "dbasis": "day",
+      "maxDay": 45,
+      "dnote": "小児 0.9mg/kg/日 分3（成人45mg/日 分3）",
+      "forms": [
+        {
+          "n": "小児用ムコソルバンDS1.5%",
+          "t": "powder",
+          "s": 15
+        },
+        {
+          "n": "小児用ムコソルバンシロップ0.3%",
+          "t": "liquid",
+          "s": 3
+        },
+        {
+          "n": "ムコソルバン内用液0.75%",
+          "t": "liquid",
+          "s": 7.5,
+          "note": "成人用の規格"
+        },
+        {
+          "n": "ムコソルバン錠15mg",
+          "t": "tablet",
+          "s": 15
+        },
+        {
+          "n": "ムコソルバンL錠45mg",
+          "t": "tablet",
+          "s": 45,
+          "sr": true
+        }
+      ]
+    },
+    {
+      "id": "tipepidine",
+      "name": "チペピジン",
+      "brand": "アスベリン",
+      "k": "ちぺぴじん あすべりん",
+      "r": "tipepidine asverin",
+      "dbasis": "day",
+      "dnote": "1歳未満5〜20mg/日、1〜3歳10〜25mg/日、3〜6歳15〜40mg/日 分3",
+      "forms": [
+        {
+          "n": "アスベリン散10%",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "アスベリンDS2%",
+          "t": "powder",
+          "s": 20
+        },
+        {
+          "n": "アスベリンシロップ0.5%",
+          "t": "liquid",
+          "s": 5
+        },
+        {
+          "n": "アスベリン錠10mg",
+          "t": "tablet",
+          "s": 10
+        },
+        {
+          "n": "アスベリン錠20mg",
+          "t": "tablet",
+          "s": 20
+        }
+      ]
+    },
+    {
+      "id": "acetaminophen",
+      "name": "アセトアミノフェン",
+      "brand": "カロナール",
+      "k": "あせとあみのふぇん かろなーる あんひば",
+      "r": "acetaminophen calonal anhiba",
+      "dmin": 10,
+      "dmax": 15,
+      "dbasis": "dose",
+      "maxDay": 1500,
+      "dnote": "小児 1回10〜15mg/kg、4〜6時間以上あける。1日60mg/kg以内かつ1500mg以内",
+      "forms": [
+        {
+          "n": "カロナール細粒20%",
+          "t": "powder",
+          "s": 200
+        },
+        {
+          "n": "カロナール細粒50%",
+          "t": "powder",
+          "s": 500
+        },
+        {
+          "n": "カロナールシロップ2%",
+          "t": "liquid",
+          "s": 20
+        },
+        {
+          "n": "カロナール錠200mg",
+          "t": "tablet",
+          "s": 200
+        },
+        {
+          "n": "カロナール錠300mg",
+          "t": "tablet",
+          "s": 300
+        },
+        {
+          "n": "カロナール錠500mg",
+          "t": "tablet",
+          "s": 500
+        },
+        {
+          "n": "アンヒバ坐剤小児用50mg",
+          "t": "supp",
+          "s": 50
+        },
+        {
+          "n": "アンヒバ坐剤小児用100mg",
+          "t": "supp",
+          "s": 100
+        },
+        {
+          "n": "アンヒバ坐剤小児用200mg",
+          "t": "supp",
+          "s": 200
+        }
+      ]
+    },
+    {
+      "id": "clarithromycin",
+      "name": "クラリスロマイシン",
+      "brand": "クラリス",
+      "potency": true,
+      "k": "くらりすろまいしん くらりす",
+      "r": "clarithromycin clarith",
+      "dmin": 10,
+      "dmax": 15,
+      "dbasis": "day",
+      "maxDay": 400,
+      "dnote": "小児 10〜15mg(力価)/kg/日 分2〜3（成人400mg/日 分2）",
+      "forms": [
+        {
+          "n": "クラリスドライシロップ10%小児用",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "クラリス錠50mg小児用",
+          "t": "tablet",
+          "s": 50
+        },
+        {
+          "n": "クラリス錠200",
+          "t": "tablet",
+          "s": 200
+        }
+      ]
+    },
+    {
+      "id": "amoxicillin",
+      "name": "アモキシシリン",
+      "brand": "サワシリン／ワイドシリン",
+      "potency": true,
+      "k": "あもきししりん さわしりん わいどしりん",
+      "r": "amoxicillin sawacillin widecillin",
+      "dmin": 20,
+      "dmax": 40,
+      "dbasis": "day",
+      "maxDay": 1000,
+      "dnote": "小児 20〜40mg(力価)/kg/日 分3〜4（中耳炎等では高用量を用いることがある）",
+      "forms": [
+        {
+          "n": "ワイドシリン細粒20%",
+          "t": "powder",
+          "s": 200
+        },
+        {
+          "n": "ワイドシリン細粒10%",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "サワシリン細粒10%",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "サワシリン錠250",
+          "t": "tablet",
+          "s": 250
+        },
+        {
+          "n": "サワシリンカプセル125",
+          "t": "cap",
+          "s": 125
+        },
+        {
+          "n": "サワシリンカプセル250",
+          "t": "cap",
+          "s": 250
+        }
+      ]
+    },
+    {
+      "id": "cefditoren",
+      "name": "セフジトレンピボキシル",
+      "brand": "メイアクトMS",
+      "potency": true,
+      "k": "せふじとれんぴぼきしる めいあくと",
+      "r": "cefditoren meiact",
+      "dmin": 9,
+      "dmax": 9,
+      "dbasis": "day",
+      "maxDay": 300,
+      "dnote": "小児 9mg(力価)/kg/日 分3（重症時18mg/kg/日まで）",
+      "forms": [
+        {
+          "n": "メイアクトMS小児用細粒10%",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "メイアクトMS錠100mg",
+          "t": "tablet",
+          "s": 100
+        }
+      ]
+    },
+    {
+      "id": "cefcapene",
+      "name": "セフカペンピボキシル",
+      "brand": "フロモックス",
+      "potency": true,
+      "k": "せふかぺんぴぼきしる ふろもっくす",
+      "r": "cefcapene flomox",
+      "dmin": 9,
+      "dmax": 9,
+      "dbasis": "day",
+      "maxDay": 300,
+      "dnote": "小児 9mg(力価)/kg/日 分3（成人300mg/日 分3）",
+      "forms": [
+        {
+          "n": "フロモックス小児用細粒100mg",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "フロモックス錠75mg",
+          "t": "tablet",
+          "s": 75
+        },
+        {
+          "n": "フロモックス錠100mg",
+          "t": "tablet",
+          "s": 100
+        }
+      ]
+    },
+    {
+      "id": "fexofenadine",
+      "name": "フェキソフェナジン",
+      "brand": "アレグラ",
+      "k": "ふぇきそふぇなじん あれぐら",
+      "r": "fexofenadine allegra",
+      "dbasis": "day",
+      "dnote": "6か月〜2歳未満30mg/日、2〜7歳未満60mg/日、7〜12歳未満120mg/日（分2）",
+      "ageBands": [
+        {
+          "a0": 0.5,
+          "a1": 2,
+          "label": "6ヵ月以上2歳未満",
+          "mg": 15,
+          "times": 2
+        },
+        {
+          "a0": 2,
+          "a1": 7,
+          "label": "2歳以上7歳未満",
+          "mg": 30,
+          "times": 2
+        },
+        {
+          "a0": 7,
+          "a1": 12,
+          "label": "7歳以上12歳未満",
+          "mg": 60,
+          "times": 2
+        },
+        {
+          "a0": 12,
+          "a1": null,
+          "label": "12歳以上",
+          "mg": 60,
+          "times": 2
+        }
+      ],
+      "forms": [
+        {
+          "n": "アレグラドライシロップ5%",
+          "t": "powder",
+          "s": 50
+        },
+        {
+          "n": "アレグラ錠30mg",
+          "t": "tablet",
+          "s": 30
+        },
+        {
+          "n": "アレグラ錠60mg",
+          "t": "tablet",
+          "s": 60
+        }
+      ]
+    },
+    {
+      "id": "levocetirizine",
+      "name": "レボセチリジン",
+      "brand": "ザイザル",
+      "k": "れぼせちりじん ざいざる",
+      "r": "levocetirizine xyzal",
+      "dbasis": "day",
+      "dnote": "6か月〜1歳未満1.25mg 分1、1〜7歳未満2.5mg 分2、7〜15歳未満5mg 分2",
+      "ageBands": [
+        {
+          "a0": 0.5,
+          "a1": 1,
+          "label": "6ヵ月以上1歳未満",
+          "mg": 1.25,
+          "times": 1
+        },
+        {
+          "a0": 1,
+          "a1": 7,
+          "label": "1歳以上7歳未満",
+          "mg": 1.25,
+          "times": 2
+        },
+        {
+          "a0": 7,
+          "a1": 15,
+          "label": "7歳以上15歳未満",
+          "mg": 2.5,
+          "times": 2
+        },
+        {
+          "a0": 15,
+          "a1": null,
+          "label": "15歳以上",
+          "mg": 5,
+          "times": 1
+        }
+      ],
+      "forms": [
+        {
+          "n": "ザイザルシロップ0.05%",
+          "t": "liquid",
+          "s": 0.5
+        },
+        {
+          "n": "ザイザル錠5mg",
+          "t": "tablet",
+          "s": 5
+        }
+      ]
+    },
+    {
+      "id": "montelukast",
+      "name": "モンテルカスト",
+      "brand": "キプレス／シングレア",
+      "k": "もんてるかすと きぷれす しんぐれあ",
+      "r": "montelukast kipres singulair",
+      "dbasis": "day",
+      "dnote": "1〜6歳未満4mg 分1、6〜15歳未満5mg 分1、15歳以上10mg 分1（就寝前）",
+      "ageBands": [
+        {
+          "a0": 1,
+          "a1": 6,
+          "label": "1歳以上6歳未満",
+          "mg": 4,
+          "times": 1
+        },
+        {
+          "a0": 6,
+          "a1": 15,
+          "label": "6歳以上15歳未満",
+          "mg": 5,
+          "times": 1
+        },
+        {
+          "a0": 15,
+          "a1": null,
+          "label": "15歳以上",
+          "mg": 10,
+          "times": 1
+        }
+      ],
+      "forms": [
+        {
+          "n": "キプレス細粒4mg",
+          "t": "sachet",
+          "s": 4
+        },
+        {
+          "n": "キプレスチュアブル錠5mg",
+          "t": "chew",
+          "s": 5
+        },
+        {
+          "n": "キプレス錠5mg",
+          "t": "tablet",
+          "s": 5
+        },
+        {
+          "n": "キプレス錠10mg",
+          "t": "tablet",
+          "s": 10
+        }
+      ]
+    },
+    {
+      "id": "pranlukast",
+      "name": "プランルカスト",
+      "brand": "オノン",
+      "k": "ぷらんるかすと おのん",
+      "r": "pranlukast onon",
+      "dmin": 7,
+      "dmax": 10,
+      "dbasis": "day",
+      "maxDay": 450,
+      "dnote": "小児 7mg/kg/日 分2（最大10mg/kg/日、450mg/日まで）",
+      "forms": [
+        {
+          "n": "オノンドライシロップ10%",
+          "t": "powder",
+          "s": 100
+        },
+        {
+          "n": "オノンカプセル112.5mg",
+          "t": "cap",
+          "s": 112.5
+        }
+      ]
+    },
+    {
+      "id": "epinastine",
+      "name": "エピナスチン",
+      "brand": "アレジオン",
+      "k": "えぴなすちん あれじおん",
+      "r": "epinastine alesion",
+      "dbasis": "day",
+      "dnote": "3〜7歳未満0.25mg/kg/日 分1、7歳以上10〜20mg/日 分1",
+      "forms": [
+        {
+          "n": "アレジオンドライシロップ1%",
+          "t": "powder",
+          "s": 10
+        },
+        {
+          "n": "アレジオン錠10mg",
+          "t": "tablet",
+          "s": 10
+        },
+        {
+          "n": "アレジオン錠20mg",
+          "t": "tablet",
+          "s": 20
+        }
+      ]
+    },
+    {
+      "id": "oseltamivir",
+      "name": "オセルタミビル",
+      "brand": "タミフル",
+      "k": "おせるたみびる たみふる",
+      "r": "oseltamivir tamiflu",
+      "dmin": 2,
+      "dmax": 2,
+      "dbasis": "dose",
+      "maxDay": 150,
+      "dnote": "小児 1回2mg/kg 1日2回 5日間（1回75mgを超えない）",
+      "forms": [
+        {
+          "n": "タミフルドライシロップ3%",
+          "t": "powder",
+          "s": 30
+        },
+        {
+          "n": "タミフルカプセル75",
+          "t": "cap",
+          "s": 75
+        }
+      ]
+    },
+    {
+      "id": "tulobuterol",
+      "name": "ツロブテロール",
+      "brand": "ホクナリン",
+      "k": "つろぶてろーる ほくなりん",
+      "r": "tulobuterol hokunalin",
+      "dbasis": "day",
+      "dnote": "内服 小児 0.04mg/kg/日 分2〜3程度。貼付剤とは用法が異なる",
+      "forms": [
+        {
+          "n": "ホクナリンドライシロップ0.1%小児用",
+          "t": "powder",
+          "s": 1
+        },
+        {
+          "n": "ホクナリン錠1mg",
+          "t": "tablet",
+          "s": 1
+        },
+        {
+          "n": "ホクナリン錠2mg",
+          "t": "tablet",
+          "s": 2
+        }
+      ]
+    },
+    {
+      "id": "valproate",
+      "name": "バルプロ酸ナトリウム",
+      "brand": "デパケン",
+      "k": "ばるぷろさん でぱけん せれにか",
+      "r": "valproate depakene selenica",
+      "dmin": 15,
+      "dmax": 30,
+      "dbasis": "day",
+      "dnote": "15〜30mg/kg/日 分2〜3（徐放製剤は分1〜2）",
+      "forms": [
+        {
+          "n": "デパケン細粒20%",
+          "t": "powder",
+          "s": 200
+        },
+        {
+          "n": "デパケン細粒40%",
+          "t": "powder",
+          "s": 400
+        },
+        {
+          "n": "デパケンシロップ5%",
+          "t": "liquid",
+          "s": 50
+        },
+        {
+          "n": "デパケン錠100mg",
+          "t": "tablet",
+          "s": 100
+        },
+        {
+          "n": "デパケン錠200mg",
+          "t": "tablet",
+          "s": 200
+        },
+        {
+          "n": "デパケンR錠100mg",
+          "t": "tablet",
+          "s": 100,
+          "sr": true
+        },
+        {
+          "n": "デパケンR錠200mg",
+          "t": "tablet",
+          "s": 200,
+          "sr": true
+        },
+        {
+          "n": "セレニカR顆粒40%",
+          "t": "powder",
+          "s": 400,
+          "sr": true
+        }
+      ]
+    },
+    {
+      "id": "prednisolone",
+      "name": "プレドニゾロン",
+      "brand": "プレドニン",
+      "k": "ぷれどにぞろん ぷれどにん",
+      "r": "prednisolone predonine",
+      "dmin": 0.5,
+      "dmax": 2,
+      "dbasis": "day",
+      "dnote": "小児 0.5〜2mg/kg/日 分1〜4（疾患により異なる）",
+      "forms": [
+        {
+          "n": "プレドニゾロン散1%",
+          "t": "powder",
+          "s": 10
+        },
+        {
+          "n": "プレドニゾロン錠5mg",
+          "t": "tablet",
+          "s": 5
+        },
+        {
+          "n": "プレドニン錠5mg",
+          "t": "tablet",
+          "s": 5
+        }
+      ]
+    },
+    {
+      "id": "magnesium",
+      "name": "酸化マグネシウム",
+      "brand": "マグミット",
+      "k": "さんかまぐねしうむ まぐみっと かま",
+      "r": "magnesium oxide magmitt",
+      "un": "g",
+      "uf": 1000,
+      "dbasis": "day",
+      "dnote": "便秘 小児は年齢別（2歳未満0.2〜0.5g/日、2〜5歳0.4〜0.75g/日、6〜11歳0.6〜1g/日 分3）",
+      "forms": [
+        {
+          "n": "酸化マグネシウム原末",
+          "t": "powder",
+          "s": 1000
+        },
+        {
+          "n": "マグミット錠200mg",
+          "t": "tablet",
+          "s": 200
+        },
+        {
+          "n": "マグミット錠250mg",
+          "t": "tablet",
+          "s": 250
+        },
+        {
+          "n": "マグミット錠330mg",
+          "t": "tablet",
+          "s": 330
+        },
+        {
+          "n": "マグミット錠500mg",
+          "t": "tablet",
+          "s": 500
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "id": "g_abx",
+      "name": "抗菌薬",
+      "ids": [
+        "clarithromycin",
+        "amoxicillin",
+        "cefditoren",
+        "cefcapene"
+      ]
+    },
+    {
+      "id": "g_resp",
+      "name": "去痰・鎮咳",
+      "ids": [
+        "carbo",
+        "ambroxol",
+        "tipepidine"
+      ]
+    },
+    {
+      "id": "g_aller",
+      "name": "抗アレルギー",
+      "ids": [
+        "fexofenadine",
+        "levocetirizine",
+        "epinastine",
+        "montelukast",
+        "pranlukast"
+      ]
+    },
+    {
+      "id": "g_anti",
+      "name": "解熱鎮痛",
+      "ids": [
+        "acetaminophen"
+      ]
+    }
+  ]
+}
