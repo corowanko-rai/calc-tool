@@ -242,7 +242,7 @@
       </div>
       <input type="file" id="mFile" accept=".json,application/json" style="display:none;">
       <div id="mImportSlot"></div>
-      <div class="hint">書き出したJSONを他の端末で読み込むとマスタが揃います。アプリと同じ場所に <b>defaults.json</b> として置いておくと、新しい端末は初回起動時に自動で取り込みます。</div>
+      <div class="hint">書き出したJSONを他の端末で読み込むとマスタが揃います。アプリと同じ場所に <b>drug-master.json</b> として1つ上の階層（入口ページと同じ場所）に置いておくと、新しい端末は初回起動時に自動で取り込みます。このマスタは水剤MIX調製計算と共通です。</div>
     </div>
   </div>
 </div>
@@ -274,7 +274,7 @@
 const DEFAULT_DRUGS = [
  {id:'carbo', name:'カルボシステイン', brand:'ムコダイン',
   k:'かるぼしすていん むこだいん', r:'carbocisteine mucodyne',
-  dmin:30, dmax:30, dbasis:'day', maxDay:1500,
+  dmin:30, dmax:30, dbasis:'day', maxDay:1500, toleranceKg:5,
   dnote:'小児 1回10mg/kg 1日3回（成人1500mg/日 分3）',
   forms:[{n:'ムコダインDS50%',t:'powder',s:500},{n:'ムコダインシロップ5%',t:'liquid',s:50},
          {n:'ムコダイン錠250mg',t:'tablet',s:250},{n:'ムコダイン錠500mg',t:'tablet',s:500}]},
@@ -337,17 +337,34 @@ const DEFAULT_DRUGS = [
  {id:'fexofenadine', name:'フェキソフェナジン', brand:'アレグラ',
   k:'ふぇきそふぇなじん あれぐら', r:'fexofenadine allegra', dbasis:'day',
   dnote:'6か月〜2歳未満30mg/日、2〜7歳未満60mg/日、7〜12歳未満120mg/日（分2）',
+  ageBands:[
+    {a0:0.5, a1:2,  label:'6ヵ月以上2歳未満',  mg:15, times:2},
+    {a0:2,   a1:7,  label:'2歳以上7歳未満',    mg:30, times:2},
+    {a0:7,   a1:12, label:'7歳以上12歳未満',   mg:60, times:2},
+    {a0:12,  a1:null,label:'12歳以上',         mg:60, times:2}
+  ],
   forms:[{n:'アレグラドライシロップ5%',t:'powder',s:50},
          {n:'アレグラ錠30mg',t:'tablet',s:30},{n:'アレグラ錠60mg',t:'tablet',s:60}]},
 
  {id:'levocetirizine', name:'レボセチリジン', brand:'ザイザル',
   k:'れぼせちりじん ざいざる', r:'levocetirizine xyzal', dbasis:'day',
   dnote:'6か月〜1歳未満1.25mg 分1、1〜7歳未満2.5mg 分2、7〜15歳未満5mg 分2',
+  ageBands:[
+    {a0:0.5, a1:1,  label:'6ヵ月以上1歳未満',  mg:1.25, times:1},
+    {a0:1,   a1:7,  label:'1歳以上7歳未満',    mg:1.25, times:2},
+    {a0:7,   a1:15, label:'7歳以上15歳未満',   mg:2.5,  times:2},
+    {a0:15,  a1:null,label:'15歳以上',         mg:5,    times:1}
+  ],
   forms:[{n:'ザイザルシロップ0.05%',t:'liquid',s:0.5},{n:'ザイザル錠5mg',t:'tablet',s:5}]},
 
  {id:'montelukast', name:'モンテルカスト', brand:'キプレス／シングレア',
   k:'もんてるかすと きぷれす しんぐれあ', r:'montelukast kipres singulair', dbasis:'day',
   dnote:'1〜6歳未満4mg 分1、6〜15歳未満5mg 分1、15歳以上10mg 分1（就寝前）',
+  ageBands:[
+    {a0:1,  a1:6,   label:'1歳以上6歳未満',  mg:4,  times:1},
+    {a0:6,  a1:15,  label:'6歳以上15歳未満', mg:5,  times:1},
+    {a0:15, a1:null,label:'15歳以上',        mg:10, times:1}
+  ],
   forms:[{n:'キプレス細粒4mg',t:'sachet',s:4},{n:'キプレスチュアブル錠5mg',t:'chew',s:5},
          {n:'キプレス錠5mg',t:'tablet',s:5},{n:'キプレス錠10mg',t:'tablet',s:10}]},
 
@@ -418,25 +435,51 @@ const DEFAULT_GROUPS = [
   {id:'g_anti',  name:'解熱鎮痛',     ids:['acetaminophen']}
 ];
 
-/* ================= 保存 ================= */
-const LS_M='dfconv.master.v3', LS_S='dfconv.state.v4', LS_G='dfconv.groups.v1';
+/* ================= 保存 =================
+   薬剤マスタと薬効グループは、同じドメインの他ツール（水剤MIX調製計算など）と
+   共通のキー calcTool.drugMaster.v1 に保存する。localStorage はオリジン単位で
+   共有されるため、/mix/ と /dfconv/ は同じデータを参照できる。 */
+const LS_SHARED='calcTool.drugMaster.v1';
+const LS_S='dfconv.state.v4';
+const LS_M_OLD='dfconv.master.v3', LS_G_OLD='dfconv.groups.v1';
 function lsGet(k){ try{return window.localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{window.localStorage.setItem(k,v);}catch(e){} }
 
+function loadShared(){
+  const raw=lsGet(LS_SHARED);
+  if(raw){
+    try{ const o=JSON.parse(raw);
+      if(o&&Array.isArray(o.drugs)&&o.drugs.length) return o;
+    }catch(e){}
+  }
+  // 旧キーからの移行
+  const om=lsGet(LS_M_OLD);
+  if(om){
+    try{ const d=JSON.parse(om);
+      if(Array.isArray(d)&&d.length){
+        let g=null;
+        try{ g=JSON.parse(lsGet(LS_G_OLD)); }catch(e){}
+        return {drugs:d, groups:Array.isArray(g)?g:null, migrated:true};
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
 let MASTER_IS_BUILTIN=false;
+const _shared=loadShared();
 let DRUGS=(function(){
-  const raw=lsGet(LS_M);
-  if(raw){ try{const d=JSON.parse(raw); if(Array.isArray(d)&&d.length) return d;}catch(e){} }
+  if(_shared) return _shared.drugs;
   MASTER_IS_BUILTIN=true;
   return JSON.parse(JSON.stringify(DEFAULT_DRUGS));
 })();
 
 let GROUPS=(function(){
-  const raw=lsGet(LS_G);
-  if(raw){ try{const g=JSON.parse(raw); if(Array.isArray(g)) return g;}catch(e){} }
+  if(_shared&&Array.isArray(_shared.groups)&&_shared.groups.length) return _shared.groups;
   return JSON.parse(JSON.stringify(DEFAULT_GROUPS));
 })();
-function saveGroups(){ lsSet(LS_G, JSON.stringify(GROUPS)); }
+function saveGroups(){ saveShared(); }
+if(_shared&&_shared.migrated) saveShared();
 function groupOf(drugId){
   return GROUPS.find(function(g){ return (g.ids||[]).indexOf(drugId)>=0; })||null;
 }
@@ -451,7 +494,12 @@ let st={ weight:'', stepTab:0.5, recent:[], rps:[newRp()] };
   }catch(e){}
 })();
 function saveState(){ lsSet(LS_S, JSON.stringify(st)); }
-function saveMaster(){ lsSet(LS_M, JSON.stringify(DRUGS)); }
+function saveShared(){
+  lsSet(LS_SHARED, JSON.stringify({
+    version:1, updatedAt:new Date().toISOString(), drugs:DRUGS, groups:GROUPS
+  }));
+}
+function saveMaster(){ saveShared(); }
 
 /* ================= 小物 ================= */
 const $=function(id){return document.getElementById(id);};
@@ -927,7 +975,8 @@ function renderMasterList(){
   DRUGS.forEach(function(d,i){
     const row=document.createElement('div'); row.className='m-item';
     const nm=document.createElement('div'); nm.className='m-name';
-    nm.innerHTML='<strong>'+d.name+'</strong><span>'+d.forms.length+'剤形'+(d.brand?'／'+d.brand:'')+'</span>';
+    nm.innerHTML='<strong>'+d.name+'</strong><span>'+d.forms.length+'剤形'+
+      (d.brand?'／'+d.brand:'')+(d.ageBands?'／年齢区分'+d.ageBands.length:'')+'</span>';
     const ed=document.createElement('div'); ed.className='m-act'; ed.textContent='編集';
     ed.addEventListener('click',function(){openDrugForm(i);});
     const dl=document.createElement('div'); dl.className='m-act del'; dl.textContent='削除';
@@ -969,6 +1018,14 @@ function openDrugForm(index){
     '<div class="m-frow"><span class="mlb">1日最大量</span>'+
       '<input type="number" class="num" data-f="maxDay" placeholder="例 1000" step="0.1">'+
       '<span class="mlb">mg</span></div>'+
+    '<div class="m-frow"><span class="mlb">許容差</span>'+
+      '<input type="number" class="num" data-f="toleranceKg" placeholder="±5" step="0.1">'+
+      '<span class="mlb">kg（水剤MIXの鑑査）</span></div>'+
+    '<div class="fl">年齢区分（任意）</div>'+
+    '<div class="m-sub">年齢で1回量が決まる薬はここに登録します。1回の成分量（mg）で入力してください。'+
+      '水剤MIX調製計算の年齢鑑査にも使われます。</div>'+
+    '<div id="mBandsHost"></div>'+
+    '<button class="btn ghost small" id="mAddBand" type="button" style="margin-top:4px;">＋ 区分を追加</button>'+
     '<div class="fl">剤形と含量</div>'+
     '<div class="m-sub">含量は1g・1mL・1錠あたりの成分量（mg）で入力します。</div><div id="mFormsHost"></div>'+
     '<button class="btn ghost small" id="mAddForm" type="button" style="margin-top:4px;">＋ 剤形を追加</button>'+
@@ -979,8 +1036,29 @@ function openDrugForm(index){
   const set=function(k,v){const el=box.querySelector('[data-f="'+k+'"]');if(el)el.value=(v===undefined||v===null)?'':v;};
   set('name',src.name);set('brand',src.brand);set('k',src.k);set('r',src.r);
   set('dnote',src.dnote);set('dmin',src.dmin);set('dmax',src.dmax);set('maxDay',src.maxDay);
+  set('toleranceKg',src.toleranceKg);
   box.querySelector('[data-f="dbasis"]').value=src.dbasis||'day';
   box.querySelector('[data-f="un"]').value=src.un||(src.potency?'mg(力価)':'mg');
+  const bh=box.querySelector('#mBandsHost');
+  function addBand(b){
+    const r=document.createElement('div'); r.className='m-frow';
+    r.innerHTML='<input type="number" class="num" data-b="a0" placeholder="下限" step="0.1" style="flex:1;">'+
+      '<span class="mlb">〜</span>'+
+      '<input type="number" class="num" data-b="a1" placeholder="上限" step="0.1" style="flex:1;">'+
+      '<span class="mlb">歳</span>'+
+      '<input type="number" class="num" data-b="mg" placeholder="1回mg" step="0.01" style="flex:1.2;">'+
+      '<input type="number" class="num" data-b="times" placeholder="回" step="1" style="flex:0.8;">'+
+      '<span class="mlb">回/日</span><span class="x">×</span>';
+    r.querySelector('[data-b="a0"]').value=(b.a0!==undefined&&b.a0!==null)?b.a0:'';
+    r.querySelector('[data-b="a1"]').value=(b.a1!==undefined&&b.a1!==null)?b.a1:'';
+    r.querySelector('[data-b="mg"]').value=(b.mg!==undefined)?b.mg:'';
+    r.querySelector('[data-b="times"]').value=(b.times!==undefined)?b.times:'';
+    r.querySelector('.x').addEventListener('click',function(){r.remove();});
+    bh.appendChild(r);
+  }
+  (src.ageBands||[]).forEach(addBand);
+  box.querySelector('#mAddBand').addEventListener('click',function(){addBand({});});
+
   const fh=box.querySelector('#mFormsHost');
   function addRow(f){
     const r=document.createElement('div'); r.className='m-frow';
@@ -1027,12 +1105,37 @@ function openDrugForm(index){
     if(un==='mg(力価)') o.potency=true;
     if(un==='g'){o.un='g';o.uf=1000;}
     if(un==='μg'){o.un='μg';o.uf=0.001;}
-    const a=num(g('dmin')),b=num(g('dmax')),m=num(g('maxDay'));
+    const a=num(g('dmin')),b=num(g('dmax')),m=num(g('maxDay')),tk=num(g('toleranceKg'));
     if(a!==null){o.dmin=a;o.dmax=(b!==null?b:a);}
     if(m!==null)o.maxDay=m;
+    if(tk!==null)o.toleranceKg=tk;
+    const bands=[];
+    bh.querySelectorAll('.m-frow').forEach(function(r){
+      const a0=num(r.querySelector('[data-b="a0"]').value);
+      const a1=num(r.querySelector('[data-b="a1"]').value);
+      const mg=num(r.querySelector('[data-b="mg"]').value);
+      const tm=num(r.querySelector('[data-b="times"]').value);
+      if(a0===null||mg===null||mg<=0||tm===null||tm<=0) return;
+      bands.push({a0:a0, a1:(a1===null?null:a1), label:bandLabel(a0,a1), mg:mg, times:tm});
+    });
+    if(bands.length) o.ageBands=bands;
     if(index===-1)DRUGS.push(o); else DRUGS[index]=o;
     saveMaster();slot.innerHTML='';renderMasterList();renderGroupList();renderRps();toast('保存しました');
   });
+}
+
+/* ================= 年齢区分 ================= */
+function ageStr(v){
+  if(v===null||v===undefined||v==='') return '';
+  const n=Number(v);
+  if(!isFinite(n)) return '';
+  return (n<1)?(Math.round(n*12)+'ヵ月'):(fmt(n,1)+'歳');
+}
+function bandLabel(a0,a1){
+  const s0=ageStr(a0);
+  if(!s0) return '';
+  const s1=ageStr(a1);
+  return s1?(s0+'以上'+s1+'未満'):(s0+'以上');
 }
 
 /* ================= グループ編集 ================= */
@@ -1107,8 +1210,19 @@ function validDrugs(arr){
     if(!forms.length) return;
     const o={id:String(d.id||('d'+Math.random().toString(36).slice(2))), name:d.name, forms:forms};
     ['brand','k','r','dnote','un'].forEach(function(k){ if(d[k]) o[k]=String(d[k]); });
-    ['dmin','dmax','maxDay','uf'].forEach(function(k){
+    ['dmin','dmax','maxDay','uf','toleranceKg'].forEach(function(k){
       const v=parseFloat(d[k]); if(isFinite(v)) o[k]=v; });
+    if(Array.isArray(d.ageBands)){
+      const bands=[];
+      d.ageBands.forEach(function(b){
+        const a0=parseFloat(b.a0), mg=parseFloat(b.mg), tm=parseFloat(b.times);
+        if(!isFinite(a0)||!isFinite(mg)||!isFinite(tm)) return;
+        const a1=parseFloat(b.a1);
+        bands.push({a0:a0, a1:isFinite(a1)?a1:null,
+                    label:b.label||bandLabel(a0,isFinite(a1)?a1:null), mg:mg, times:tm});
+      });
+      if(bands.length) o.ageBands=bands;
+    }
     if(d.potency) o.potency=true;
     o.dbasis=(d.dbasis==='dose')?'dose':'day';
     out.push(o);
@@ -1164,7 +1278,7 @@ function showImportChoice(list, label, groups){
   box.querySelectorAll('button').forEach(function(b){
     b.addEventListener('click',function(){
       const a=b.dataset.a;
-      if(a==='rep'){ DRUGS=list; if(groups){GROUPS=groups; saveGroups();} toast('置き換えました'); }
+      if(a==='rep'){ DRUGS=list; if(groups){GROUPS=groups;} toast('置き換えました'); }
       else if(a==='add'){
         let n=0;
         list.forEach(function(d){
@@ -1176,7 +1290,6 @@ function showImportChoice(list, label, groups){
             if(GROUPS.some(function(x){return x.id===g.id||x.name===g.name;})) return;
             GROUPS.push(g);
           });
-          saveGroups();
         }
         toast(n?n+'成分を追加しました':'追加するものがありませんでした');
       }
@@ -1191,7 +1304,7 @@ function fetchDefaults(silent){
     if(!silent) toast('この環境では取得できません');
     return Promise.resolve(false);
   }
-  return fetch('defaults.json?t='+Date.now(),{cache:'no-store'}).then(function(r){
+  return fetch('../drug-master.json?t='+Date.now(),{cache:'no-store'}).then(function(r){
     if(!r.ok) throw new Error('no file');
     return r.json();
   }).then(function(j){
@@ -1199,15 +1312,15 @@ function fetchDefaults(silent){
     if(!list) throw new Error('bad format');
     const gs=validGroups(j&&j.groups);
     if(silent){
-      DRUGS=list; MASTER_IS_BUILTIN=false; saveMaster();
-      if(gs){ GROUPS=gs; saveGroups(); }
-      renderRps();
+      DRUGS=list; MASTER_IS_BUILTIN=false;
+      if(gs){ GROUPS=gs; }
+      saveShared(); renderRps();
     }else{
-      showImportChoice(list,'配布マスタ（defaults.json）',gs);
+      showImportChoice(list,'共通マスタ（drug-master.json）',gs);
     }
     return true;
   }).catch(function(){
-    if(!silent) toast('defaults.json が見つかりませんでした');
+    if(!silent) toast('drug-master.json が見つかりませんでした');
     return false;
   });
 }
