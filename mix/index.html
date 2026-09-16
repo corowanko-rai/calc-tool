@@ -361,6 +361,17 @@
     padding:2px 4px;
     white-space:nowrap;
   }
+  .master-info{font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;}
+  .master-row{display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);}
+  .master-row .mn{flex:1;min-width:0;font-size:12.5px;line-height:1.35;}
+  .master-row .mn span{display:block;font-size:11px;color:var(--mute,#a49d8c);}
+  .master-row .mv{font-size:11.5px;color:var(--ink-soft);white-space:nowrap;text-align:right;}
+  .master-actions{display:flex;gap:8px;margin-top:10px;}
+  .master-btn{flex:1;text-align:center;border:1px solid var(--accent);background:#fff;color:var(--accent-deep);
+    font-family:inherit;font-size:12.5px;font-weight:700;padding:9px 8px;border-radius:8px;
+    cursor:pointer;text-decoration:none;display:block;}
+  .master-btn:active{opacity:.85;}
+  .master-note{font-size:11px;color:var(--ink-soft);margin-top:9px;line-height:1.55;}
   .manage-panel{
     display:none;
     margin-top:10px;
@@ -1206,9 +1217,9 @@
 <div class="card">
   <div class="section-label-row">
     <span class="section-label">薬剤（1日量を入力 → 日数分に自動換算）</span>
-    <span class="manage-toggle" id="manageToggle">候補リストを編集</span>
+    <span class="manage-toggle" id="manageToggle" style="display:none;">候補リストを編集</span>
   </div>
-  <div class="manage-panel" id="managePanel">
+  <div class="manage-panel" id="managePanel" style="display:none;">
     <div class="manage-list" id="manageList"></div>
     <div class="manage-add-row">
       <input type="text" id="manageAddInput" placeholder="候補に追加する薬剤名">
@@ -1288,15 +1299,31 @@
   </div>
 </div>
 
-<!-- 用量鑑査ルールの管理 -->
+<!-- 用量鑑査ルール（共通マスタ由来・読み取り専用） -->
 <div class="card">
   <div class="section-label-row">
-    <span class="section-label">用量鑑査ルール（薬剤の基準値）</span>
-    <span class="manage-toggle" id="ruleManageToggle">編集</span>
+    <span class="section-label">用量鑑査ルール（共通の薬剤マスタ）</span>
+    <span class="manage-toggle" id="masterToggle">内容を見る</span>
   </div>
+  <div class="manage-panel" id="masterPanel">
+    <div id="masterInfo" class="master-info"></div>
+    <div id="masterList"></div>
+    <div class="master-actions">
+      <button class="master-btn" id="masterReload" type="button">最新を読み込む</button>
+      <a class="master-btn link" href="../dfconv/" target="_blank" rel="noopener">剤形変更換算で編集</a>
+    </div>
+    <div class="master-note">
+      薬剤マスタは「剤形変更換算」アプリと共通です。追加・修正はあちらの「設定・薬剤マスタ」から行ってください。
+      同じ端末の同じブラウザであれば、保存した内容がこちらにもそのまま反映されます。
+    </div>
+  </div>
+</div>
+<!-- 旧・鑑査ルール編集UI（共通マスタ化に伴い非表示。既存処理の互換のため要素だけ残す） -->
+<div style="display:none;">
+  <span class="manage-toggle" id="ruleManageToggle">編集</span>
   <div class="manage-panel" id="ruleManagePanel">
     <div id="ruleList"></div>
-    <button class="rule-add-new-btn" id="ruleAddNewBtn" type="button">＋ 新しい薬剤の鑑査ルールを追加</button>
+    <button class="rule-add-new-btn" id="ruleAddNewBtn" type="button">＋</button>
     <div id="ruleFormSlot"></div>
   </div>
 </div>
@@ -1318,7 +1345,7 @@
     <span class="manage-toggle" id="backupToggle">開く</span>
   </div>
   <div class="manage-panel" id="backupPanel">
-    <div class="backup-note">定型処方・候補薬剤リスト・鑑査ルール・賦形設定をまとめて保存／復元できます。ブラウザのデータ削除に備え、設定を作り込んだらバックアップを取っておくと安心です。</div>
+    <div class="backup-note">定型処方・賦形設定をまとめて保存／復元できます。薬剤マスタ（鑑査ルール）は剤形変更換算アプリ側で書き出してください。ブラウザのデータ削除に備え、設定を作り込んだらバックアップを取っておくと安心です。</div>
     <button class="backup-btn export" id="exportBtn" type="button">設定をファイルに書き出す（バックアップ）</button>
     <button class="backup-btn" id="importBtn" type="button">バックアップファイルから復元</button>
     <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
@@ -1447,6 +1474,67 @@
   let NAME_SUGGESTIONS = (Array.isArray(saved.suggestions) && saved.suggestions.length > 0)
     ? saved.suggestions.slice()
     : DEFAULT_SUGGESTIONS.slice();
+
+  /* ===================================================================
+     共通薬剤マスタ（剤形変更換算アプリと共有）
+     localStorage はオリジン単位で共有されるため、同じドメインに置いた
+     /dfconv/ と /mix/ は同じキーのデータを参照できる。
+     マスタの編集は剤形変更換算アプリ側で行い、こちらは読むだけ。
+     =================================================================== */
+  const SHARED_MASTER_KEY = 'calcTool.drugMaster.v1';
+  let sharedMaster = null;
+
+  function loadSharedMaster(){
+    try{
+      const raw = localStorage.getItem(SHARED_MASTER_KEY);
+      if(raw){
+        const o = JSON.parse(raw);
+        if(o && Array.isArray(o.drugs) && o.drugs.length) return o;
+      }
+    }catch(e){}
+    return null;
+  }
+
+  // 共通マスタ → このアプリの鑑査ルール・候補薬剤名に変換（水剤の剤形のみ対象）
+  function applySharedMaster(m){
+    if(!m || !Array.isArray(m.drugs) || !m.drugs.length) return false;
+    sharedMaster = m;
+    const rules = {}, names = [];
+    m.drugs.forEach(d=>{
+      (d.forms||[]).forEach(f=>{
+        if(f.t !== 'liquid') return;             // 水剤のみ
+        if(names.indexOf(f.n) < 0) names.push(f.n);
+        if(Array.isArray(d.ageBands) && d.ageBands.length){
+          rules[f.n] = {
+            type: 'age',
+            genericName: d.name,
+            bands: d.ageBands.map(b=>({
+              minAge: b.a0,
+              maxAge: (b.a1 === null || b.a1 === undefined) ? 999 : b.a1,
+              label: b.label || '',
+              perDoseMl: Math.round((b.mg / f.s) * 100) / 100,
+              timesPerDay: b.times
+            }))
+          };
+        } else if(d.dmin !== undefined && d.dbasis !== 'dose'){
+          rules[f.n] = {
+            type: 'weight',
+            genericName: d.name,
+            concentration: f.s,
+            dosePerKgPerDay: (d.dmin + ((d.dmax !== undefined) ? d.dmax : d.dmin)) / 2,
+            toleranceKg: (d.toleranceKg !== undefined) ? d.toleranceKg : 5
+          };
+        }
+        // 頓用基準（mg/kg/回）の薬剤は1日量ベースの鑑査になじまないため
+        // 候補名だけ載せ、鑑査ルールは作らない
+      });
+    });
+    drugAuditRules = rules;
+    NAME_SUGGESTIONS = names;
+    return true;
+  }
+
+  applySharedMaster(loadSharedMaster());
 
   // ---------- チップ共通ハンドラ ----------
   function setupChipGroup(containerId, customInputId, onSelect, initVal){
@@ -2813,6 +2901,95 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
   // 初回ロード時、1つ目の薬剤の1日量入力に自動フォーカス（入力を即座に始められるように）
   const firstInput = drugListEl.querySelector('.perday-input');
   if(firstInput) firstInput.focus();
+
+  /* ---------- 共通薬剤マスタ（読み取り専用ビュー） ---------- */
+  const masterToggle = document.getElementById('masterToggle');
+  const masterPanel  = document.getElementById('masterPanel');
+  const masterInfo   = document.getElementById('masterInfo');
+  const masterListEl = document.getElementById('masterList');
+  const masterReload = document.getElementById('masterReload');
+
+  function ruleSummary(r){
+    if(!r) return '鑑査ルールなし';
+    if(r.type === 'weight'){
+      const ml = Math.round((r.dosePerKgPerDay / r.concentration) * 1000) / 1000;
+      return `${r.dosePerKgPerDay}mg/kg/日（${ml}ml/kg/日）・許容±${r.toleranceKg}kg`;
+    }
+    return `年齢区分 ${r.bands.length}件`;
+  }
+
+  function renderMasterView(){
+    if(!masterListEl) return;
+    if(!sharedMaster){
+      masterInfo.textContent = '共通マスタがまだ読み込まれていません。「最新を読み込む」を押すか、剤形変更換算アプリを一度開いてください。';
+      masterListEl.innerHTML = '';
+      return;
+    }
+    const n = NAME_SUGGESTIONS.length;
+    const withRule = NAME_SUGGESTIONS.filter(x=>drugAuditRules[x]).length;
+    masterInfo.textContent =
+      `成分 ${sharedMaster.drugs.length}件 ／ 水剤 ${n}製剤（うち鑑査ルールあり ${withRule}製剤）` +
+      (sharedMaster.updatedAt ? `　最終更新 ${String(sharedMaster.updatedAt).slice(0,10)}` : '');
+    masterListEl.innerHTML = NAME_SUGGESTIONS.map(name=>{
+      const r = drugAuditRules[name];
+      return `<div class="master-row">
+        <div class="mn">${escapeHtml(name)}<span>${escapeHtml(r ? r.genericName : '')}</span></div>
+        <div class="mv">${escapeHtml(ruleSummary(r))}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function reloadSharedMaster(showToast){
+    const m = loadSharedMaster();
+    if(m){
+      applySharedMaster(m);
+      renderMasterView();
+      render();
+      if(showToast) alert('共通マスタを読み込みました。');
+      return true;
+    }
+    return false;
+  }
+
+  if(masterToggle){
+    masterToggle.addEventListener('click', ()=>{
+      const willOpen = !masterPanel.classList.contains('open');
+      masterPanel.classList.toggle('open', willOpen);
+      masterToggle.textContent = willOpen ? '閉じる' : '内容を見る';
+      if(willOpen) renderMasterView();
+    });
+  }
+  if(masterReload){
+    masterReload.addEventListener('click', ()=>{
+      if(!reloadSharedMaster(true)){
+        // localStorage に無ければ、1つ上の階層の配布マスタを取りに行く
+        fetchSharedMasterFile(true);
+      }
+    });
+  }
+
+  // 入口ページと同じ場所に置いた drug-master.json を取り込む
+  function fetchSharedMasterFile(manual){
+    if(typeof fetch !== 'function') return;
+    fetch('../drug-master.json?t=' + Date.now(), {cache:'no-store'})
+      .then(r=>{ if(!r.ok) throw new Error('no file'); return r.json(); })
+      .then(j=>{
+        if(!j || !Array.isArray(j.drugs) || !j.drugs.length) throw new Error('bad');
+        const obj = {version:1, updatedAt:new Date().toISOString(), drugs:j.drugs, groups:j.groups||[]};
+        try{ localStorage.setItem(SHARED_MASTER_KEY, JSON.stringify(obj)); }catch(e){}
+        applySharedMaster(obj);
+        renderMasterView();
+        render();
+        if(manual) alert('共通マスタを取り込みました。');
+      })
+      .catch(()=>{ if(manual) alert('drug-master.json が見つかりませんでした。'); });
+  }
+
+  // 起動時：共通マスタがまだ無ければ配布ファイルから取り込む
+  if(!sharedMaster && location.protocol.indexOf('http') === 0){
+    fetchSharedMasterFile(false);
+  }
+  renderMasterView();
 
   // ---------- 設定のバックアップ・復元 ----------
   const BACKUP_FORMAT = 'mixCalcBackup';
