@@ -161,9 +161,12 @@
   .grp .ghead{font-size:11px;color:var(--mute);margin-bottom:5px;}
   .grp .gdrug{font-size:11.5px;font-weight:700;color:var(--ink-soft);margin:7px 0 2px;}
   .grp .gdrug:first-of-type{margin-top:0;}
-  .grp .grow{display:flex;align-items:baseline;gap:8px;padding:2px 0;}
-  .grp .grow .n{flex:1;min-width:0;font-size:11.5px;}
-  .grp .grow .v{font-family:var(--mono);font-size:13px;font-weight:700;white-space:nowrap;}
+  .grp .grow{padding:5px 0;border-bottom:1px dotted var(--line);}
+  .grp .grow:last-child{border-bottom:none;}
+  .grp .grow .n{font-size:11.5px;line-height:1.35;color:var(--ink);}
+  .grp .grow .r{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:1px;}
+  .grp .grow .v{font-family:var(--mono);font-size:13.5px;font-weight:700;white-space:nowrap;}
+  .grp .grow .v .u{font-size:11px;font-weight:400;margin-left:1px;}
   .grp .grow .m{font-family:var(--mono);font-size:10.5px;color:var(--mute);white-space:nowrap;}
   .g-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);}
   .g-item .g-name{flex:1;font-size:13px;}
@@ -622,10 +625,21 @@ function predictedWeight(){
 }
 function effectiveWeight(){
   const w=num($('weight').value);
-  if(w&&w>0) return {w:w, src:'実体重'};
+  if(w&&w>0) return {lo:w, hi:w, src:'実体重'};
   const p=predictedWeight();
-  if(p) return {w:Math.round(p.val*10)/10, src:'予測体重'};
+  if(p){
+    if(p.ok && isFinite(p.lo) && isFinite(p.hi)){
+      return {lo:Math.round(p.lo*10)/10, hi:Math.round(p.hi*10)/10, src:'予測体重'};
+    }
+    const v=Math.round(p.val*10)/10;
+    return {lo:v, hi:v, src:'予測体重'};
+  }
   return null;
+}
+function rangeStr(a, b, dec, unit){
+  return (Math.abs(b-a) < Math.pow(10,-dec)/2)
+    ? fmt(a,dec)+(unit||'')
+    : fmt(a,dec)+'〜'+fmt(b,dec)+(unit||'');
 }
 function renderPred(){
   const host=$('predWrap');
@@ -663,8 +677,10 @@ function groupPanelHtml(rp, it, d){
   h+='<div class="grp">';
   if(!ew){ h+='<div class="ghead">体重が分からないため計算できません</div></div>'; return h; }
   const times=rp.mode==='reg'?rp.times:1;
-  h+='<div class="ghead">体重 '+fmt(ew.w,1)+'kg（'+ew.src+'）・'+
-     (rp.mode==='reg'?'分'+times+'／1日量':'1回量')+'で計算</div>';
+  const wide=(ew.hi-ew.lo)>0.05;
+  h+='<div class="ghead">体重 '+rangeStr(ew.lo,ew.hi,1,'kg')+'（'+ew.src+'）・'+
+     (rp.mode==='reg'?'分'+times+'／1日量':'1回量')+'で計算'+
+     (wide?'　幅は体重の範囲によるものです':'')+'</div>';
   (g.ids||[]).forEach(function(id){
     const dd=getDrug(id); if(!dd) return;
     h+='<div class="gdrug">'+dd.name+(dd.dmin!==undefined
@@ -673,16 +689,19 @@ function groupPanelHtml(rp, it, d){
         : '（参考用量が未設定）')+'</div>';
     if(dd.dmin===undefined) return;
     const mid=doseMid(dd);
-    let mgBase;
-    if(dd.dbasis==='dose') mgBase=(rp.mode==='reg')?mid*ew.w*times:mid*ew.w;
-    else mgBase=(rp.mode==='reg')?mid*ew.w:mid*ew.w/times;
+    const baseOf=function(w){
+      if(dd.dbasis==='dose') return (rp.mode==='reg')?mid*w*times:mid*w;
+      return (rp.mode==='reg')?mid*w:mid*w/times;
+    };
     const un=uName(dd), uf=uFactor(dd), per=rp.mode==='reg'?'／日':'／回';
     dd.forms.forEach(function(f){
       if(f.sr) return;
-      const pl=planFor(f, mgBase, rp.mode, times);
+      const a=planFor(f, baseOf(ew.lo), rp.mode, times);
+      const b=planFor(f, baseOf(ew.hi), rp.mode, times);
       h+='<div class="grow"><div class="n">'+f.n+'</div>'+
-         '<div class="v">'+fmt(pl.val,2)+unitOf(f)+per+'</div>'+
-         '<div class="m">'+fmt(pl.mg/uf,3)+un+'</div></div>';
+         '<div class="r"><div class="v">'+rangeStr(a.val,b.val,2)+
+         '<span class="u">'+unitOf(f)+per+'</span></div>'+
+         '<div class="m">'+rangeStr(a.mg/uf,b.mg/uf,1,un)+'</div></div></div>';
     });
   });
   h+='</div>';
