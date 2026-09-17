@@ -157,13 +157,24 @@
   .pred .btn{width:auto;padding:5px 10px;font-size:11.5px;margin-left:auto;}
   .grp-toggle{margin-top:8px;font-size:11.5px;font-weight:700;color:var(--accent);
               border:1px dashed var(--line);border-radius:7px;padding:7px 9px;cursor:pointer;text-align:center;}
-  .grp{margin-top:6px;border:1px solid var(--line);border-radius:7px;padding:8px 9px;background:#fbfaf6;}
-  .grp .ghead{font-size:11px;color:var(--mute);margin-bottom:5px;}
-  .grp .gdrug{font-size:11.5px;font-weight:700;color:var(--ink-soft);margin:7px 0 2px;}
+  .grp{margin-top:6px;border:1px solid var(--line);border-radius:7px;padding:8px;background:#fbfaf6;}
+  .grp .ghead{font-size:11px;color:var(--mute);margin-bottom:6px;line-height:1.45;}
+  .grp .gdrug{display:flex;align-items:baseline;gap:6px;background:var(--accent-soft);
+              border-radius:6px;padding:6px 8px;margin-top:8px;cursor:pointer;user-select:none;}
   .grp .gdrug:first-of-type{margin-top:0;}
+  .grp .gdrug .car{font-size:9px;color:var(--accent);flex:none;width:8px;}
+  .grp .gdrug .gn{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--accent-deep);line-height:1.3;}
+  .grp .gdrug .gdose{font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);white-space:nowrap;}
+  .grp .gdrug.off{background:#efece3;}
+  .grp .gdrug.off .gn,.grp .gdrug.off .car{color:var(--mute);}
+  .grp .gbody{padding:2px 2px 0 4px;}
+  .grp .fbadge{font-size:9.5px;font-weight:700;border-radius:4px;padding:1px 5px;
+               background:#e6e1d4;color:var(--ink-soft);flex:none;letter-spacing:.02em;}
+  .grp .fbadge.liquid{background:#dcebe5;color:var(--accent-deep);}
+  .grp .fbadge.powder{background:#eae4d2;color:#6b5f3e;}
   .grp .grow{padding:5px 0;border-bottom:1px dotted var(--line);}
   .grp .grow:last-child{border-bottom:none;}
-  .grp .grow .n{font-size:11.5px;line-height:1.35;color:var(--ink);}
+  .grp .grow .n{display:flex;align-items:baseline;gap:5px;font-size:11.5px;line-height:1.35;color:var(--ink);}
   .grp .grow .r{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:1px;}
   .grp .grow .v{font-family:var(--mono);font-size:13.5px;font-weight:700;white-space:nowrap;}
   .grp .grow .v .u{font-size:11px;font-weight:400;margin-left:1px;}
@@ -668,6 +679,10 @@ function renderPred(){
 }
 
 /* ================= 同薬効グループ ================= */
+const FORM_BADGE={powder:'散', liquid:'水', tablet:'錠', chew:'噛', cap:'Cap', sachet:'包', supp:'坐'};
+function badgeHtml(f){
+  return '<span class="fbadge '+f.t+'">'+(FORM_BADGE[f.t]||'')+'</span>';
+}
 function groupPanelHtml(rp, it, d){
   const g=groupOf(it.drugId);
   if(!g) return '';
@@ -680,14 +695,38 @@ function groupPanelHtml(rp, it, d){
   const wide=(ew.hi-ew.lo)>0.05;
   h+='<div class="ghead">体重 '+rangeStr(ew.lo,ew.hi,1,'kg')+'（'+ew.src+'）・'+
      (rp.mode==='reg'?'分'+times+'／1日量':'1回量')+'で計算'+
-     (wide?'　幅は体重の範囲によるものです':'')+'</div>';
-  (g.ids||[]).forEach(function(id){
+     (wide?'。幅は体重の範囲によるものです':'')+'</div>';
+
+  // 参考用量のある成分を先に、未設定のものを後ろにまとめる
+  const ids=(g.ids||[]).slice();
+  const withDose=ids.filter(function(id){ const x=getDrug(id); return x&&x.dmin!==undefined; });
+  const noDose  =ids.filter(function(id){ const x=getDrug(id); return x&&x.dmin===undefined; });
+  const open = Array.isArray(it.gOpen) ? it.gOpen : [it.drugId];
+
+  withDose.concat(noDose).forEach(function(id){
     const dd=getDrug(id); if(!dd) return;
-    h+='<div class="gdrug">'+dd.name+(dd.dmin!==undefined
-        ? '（'+(dd.dmin===dd.dmax?fmt(dd.dmin,2):fmt(dd.dmin,2)+'〜'+fmt(dd.dmax,2))+
-          (dd.dbasis==='dose'?'mg/kg/回':'mg/kg/日')+'）'
-        : '（参考用量が未設定）')+'</div>';
-    if(dd.dmin===undefined) return;
+    const has=(dd.dmin!==undefined);
+    const isOpen=open.indexOf(id)>=0;
+    const doseTxt = has
+      ? (dd.dmin===dd.dmax?fmt(dd.dmin,2):fmt(dd.dmin,2)+'〜'+fmt(dd.dmax,2))+
+        (dd.dbasis==='dose'?'mg/kg/回':'mg/kg/日')
+      : '用量未設定';
+    h+='<div class="gdrug'+(has?'':' off')+'" data-gd="'+id+'">'+
+       '<span class="car">'+(isOpen?'▼':'▶')+'</span>'+
+       '<span class="gn">'+dd.name+'</span>'+
+       '<span class="gdose">'+doseTxt+'</span></div>';
+    if(!isOpen) return;
+
+    h+='<div class="gbody">';
+    if(!has){
+      dd.forms.forEach(function(f){
+        h+='<div class="grow"><div class="n">'+badgeHtml(f)+'<span>'+f.n+'</span></div>'+
+           '<div class="r"><div class="v" style="font-weight:400;font-size:11.5px;color:var(--mute)">'+
+           '含量 '+fmt(f.s,2)+(dd.potency?'mg力価':'mg')+'／'+unitOf(f)+'</div></div></div>';
+      });
+      h+='</div>';
+      return;
+    }
     const mid=doseMid(dd);
     const baseOf=function(w){
       if(dd.dbasis==='dose') return (rp.mode==='reg')?mid*w*times:mid*w;
@@ -698,11 +737,12 @@ function groupPanelHtml(rp, it, d){
       if(f.sr) return;
       const a=planFor(f, baseOf(ew.lo), rp.mode, times);
       const b=planFor(f, baseOf(ew.hi), rp.mode, times);
-      h+='<div class="grow"><div class="n">'+f.n+'</div>'+
+      h+='<div class="grow"><div class="n">'+badgeHtml(f)+'<span>'+f.n+'</span></div>'+
          '<div class="r"><div class="v">'+rangeStr(a.val,b.val,2)+
          '<span class="u">'+unitOf(f)+per+'</span></div>'+
          '<div class="m">'+rangeStr(a.mg/uf,b.mg/uf,1,un)+'</div></div></div>';
     });
+    h+='</div>';
   });
   h+='</div>';
   return h;
@@ -843,6 +883,15 @@ function buildItem(rp, ri, it, ii){
     });
     const gt=res.querySelector('[data-grp]');
     if(gt) gt.addEventListener('click',function(){ it.grpOpen=!it.grpOpen; saveState(); refresh(); });
+    res.querySelectorAll('[data-gd]').forEach(function(el){
+      el.addEventListener('click',function(){
+        const id=el.dataset.gd;
+        const cur=Array.isArray(it.gOpen)?it.gOpen.slice():[it.drugId];
+        const i=cur.indexOf(id);
+        if(i>=0) cur.splice(i,1); else cur.push(id);
+        it.gOpen=cur; saveState(); refresh();
+      });
+    });
     renderPred();
   }
   refresh();
