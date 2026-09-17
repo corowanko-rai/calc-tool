@@ -721,7 +721,8 @@ function groupPanelHtml(rp, it, d){
     if(!has){
       dd.forms.forEach(function(f){
         h+='<div class="grow"><div class="n">'+badgeHtml(f)+'<span>'+f.n+'</span></div>'+
-           '<div class="r"><div class="v" style="font-weight:400;font-size:11.5px;color:var(--mute)">'+
+           '<div class="r"><div class="m"></div>'+
+           '<div class="v" style="font-weight:400;font-size:11.5px;color:var(--mute)">'+
            '含量 '+fmt(f.s,2)+(dd.potency?'mg力価':'mg')+'／'+unitOf(f)+'</div></div></div>';
       });
       h+='</div>';
@@ -738,9 +739,9 @@ function groupPanelHtml(rp, it, d){
       const a=planFor(f, baseOf(ew.lo), rp.mode, times);
       const b=planFor(f, baseOf(ew.hi), rp.mode, times);
       h+='<div class="grow"><div class="n">'+badgeHtml(f)+'<span>'+f.n+'</span></div>'+
-         '<div class="r"><div class="v">'+rangeStr(a.val,b.val,2)+
-         '<span class="u">'+unitOf(f)+per+'</span></div>'+
-         '<div class="m">'+rangeStr(a.mg/uf,b.mg/uf,1,un)+'</div></div></div>';
+         '<div class="r"><div class="m">'+rangeStr(a.mg/uf,b.mg/uf,1,un)+'</div>'+
+         '<div class="v">'+rangeStr(a.val,b.val,2)+
+         '<span class="u">'+unitOf(f)+per+'</span></div></div></div>';
     });
     h+='</div>';
   });
