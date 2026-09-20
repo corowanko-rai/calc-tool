@@ -257,6 +257,8 @@
     user-select:none;
   }
   .name-chip:active{background:var(--accent-soft);}
+  .name-chip.more{border-style:dashed;color:var(--accent);font-weight:700;}
+  .name-chips-empty{font-size:11.5px;color:var(--mute);padding:2px 0 4px;}
 
   .dose-row{
     display:flex;
@@ -1500,10 +1502,12 @@
     if(!m || !Array.isArray(m.drugs) || !m.drugs.length) return false;
     sharedMaster = m;
     const rules = {}, names = [];
+    const adopted = Array.isArray(m.adopted) ? m.adopted : [];
     m.drugs.forEach(d=>{
       (d.forms||[]).forEach(f=>{
         if(f.t !== 'liquid') return;             // 水剤のみ
-        if(names.indexOf(f.n) < 0) names.push(f.n);
+        // 採用品が設定されていれば、候補はその製剤だけに絞る（鑑査ルールは全製剤ぶん作る）
+        if(names.indexOf(f.n) < 0 && (!adopted.length || adopted.indexOf(f.n) >= 0)) names.push(f.n);
         if(Array.isArray(d.ageBands) && d.ageBands.length){
           rules[f.n] = {
             type: 'age',
@@ -1535,6 +1539,77 @@
   }
 
   applySharedMaster(loadSharedMaster());
+
+  /* ===== 候補チップ：よく使う順＋入力での絞り込み ===== */
+  const RECENT_KEY = 'mixCalcRecentNames_v1';
+  let recentNames = [];
+  try{ const r = JSON.parse(localStorage.getItem(RECENT_KEY)); if(Array.isArray(r)) recentNames = r; }catch(e){}
+
+  function noteRecent(n){
+    if(!n) return;
+    recentNames = [n].concat(recentNames.filter(x=>x!==n)).slice(0,12);
+    try{ localStorage.setItem(RECENT_KEY, JSON.stringify(recentNames)); }catch(e){}
+  }
+  function normName(s){
+    return (s||'').toLowerCase()
+      .replace(/[\u30a1-\u30f6]/g, c=>String.fromCharCode(c.charCodeAt(0)-0x60))
+      .replace(/[\s・ー－―‐]/g, '');
+  }
+  const CHIP_LIMIT = 8;
+
+  function chipsFor(drug, showAll){
+    const base = NAME_SUGGESTIONS;
+    const q = normName(drug.name);
+    let list, filtered = false;
+    if(q && base.indexOf(drug.name) < 0){
+      list = base.filter(n=>normName(n).indexOf(q) >= 0);
+      filtered = true;
+    }else if(showAll){
+      list = base.slice();
+    }else{
+      list = recentNames.filter(n=>base.indexOf(n) >= 0).slice(0, CHIP_LIMIT);
+      if(!list.length) list = base.slice(0, CHIP_LIMIT);
+      if(drug.name && base.indexOf(drug.name) >= 0 && list.indexOf(drug.name) < 0) list.unshift(drug.name);
+    }
+    return {list: list.slice(0, 80), filtered: filtered,
+            more: !showAll && !filtered && list.length < base.length};
+  }
+
+  function renderChips(card, drug){
+    const host = card.querySelector('.name-chips');
+    if(!host) return;
+    const showAll = host.dataset.all === '1';
+    const r = chipsFor(drug, showAll);
+    let h = r.list.map(n=>
+      `<span class="name-chip${drug.name===n?' active':''}" data-name="${escapeHtml(n)}">${escapeHtml(n)}</span>`
+    ).join('');
+    if(!r.list.length) h = '<span class="name-chips-empty">候補に該当なし（そのまま手入力できます）</span>';
+    if(r.more)  h += `<span class="name-chip more" data-more="1">すべて ${NAME_SUGGESTIONS.length}件</span>`;
+    if(showAll) h += '<span class="name-chip more" data-more="0">閉じる</span>';
+    host.innerHTML = h;
+
+    const nameInput = card.querySelector('.drug-name-input');
+    const nameWrap  = card.querySelector('.name-field-wrap');
+    host.querySelectorAll('.name-chip[data-name]').forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        const name = chip.dataset.name;
+        drug.name = (drug.name === name) ? '' : name;
+        if(drug.name) noteRecent(drug.name);
+        nameInput.value = drug.name;
+        nameWrap.classList.toggle('has-value', !!drug.name);
+        host.dataset.all = '';
+        renderChips(card, drug);
+        syncActiveRpSnapshot();
+        updateDrugCardDisplays();
+      });
+    });
+    host.querySelectorAll('.name-chip[data-more]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        host.dataset.all = btn.dataset.more === '1' ? '1' : '';
+        renderChips(card, drug);
+      });
+    });
+  }
 
   // ---------- チップ共通ハンドラ ----------
   function setupChipGroup(containerId, customInputId, onSelect, initVal){
@@ -1760,9 +1835,7 @@
           <span class="empty-tag" style="${isEmpty ? '' : 'display:none;'}">未入力（対象外）</span>
         </div>
         ${state.drugs.length > 1 ? '<button class="remove-btn" type="button" title="このカードを削除">✕</button>' : ''}
-        <div class="name-chips">
-          ${NAME_SUGGESTIONS.map(n=>`<span class="name-chip${drug.name===n ? ' active' : ''}" data-name="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}
-        </div>
+        <div class="name-chips"></div>
         <div class="dose-row">
           <div class="dose-field">
             <label>1日量</label>
@@ -1781,6 +1854,7 @@
       nameInput.addEventListener('input', (e)=>{
         drug.name = e.target.value;
         nameWrap.classList.toggle('has-value', !!drug.name);
+        renderChips(card, drug);                 // 入力で候補を絞り込む
         syncActiveRpSnapshot();
         updateDrugCardDisplays(); // 薬剤名変更で用量根拠(添文)が変わるため
       });
@@ -1791,26 +1865,13 @@
         drug.name = '';
         nameInput.value = '';
         nameWrap.classList.remove('has-value');
-        card.querySelectorAll('.name-chip').forEach(c=>c.classList.remove('active'));
+        renderChips(card, drug);
         syncActiveRpSnapshot();
         updateDrugCardDisplays();
         nameInput.focus();
       });
 
-      // イベント: 候補タップ（同じ名前を再タップで解除）
-      card.querySelectorAll('.name-chip').forEach(chip=>{
-        chip.addEventListener('click', ()=>{
-          const name = chip.dataset.name;
-          drug.name = (drug.name === name) ? '' : name;
-          nameInput.value = drug.name;
-          nameWrap.classList.toggle('has-value', !!drug.name);
-          card.querySelectorAll('.name-chip').forEach(c=>{
-            c.classList.toggle('active', c.dataset.name === drug.name && drug.name !== '');
-          });
-          syncActiveRpSnapshot();
-          updateDrugCardDisplays();
-        });
-      });
+      renderChips(card, drug);   // 候補チップ（よく使う順・入力で絞り込み）
 
       // イベント: 1日量
       // DOM要素（inputそのもの）は再生成せず、合計表示などのテキストだけをその場で更新する。
