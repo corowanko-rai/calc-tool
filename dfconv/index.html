@@ -238,6 +238,15 @@
       <div id="mFormSlot"></div>
     </div>
     <div style="border-top:1px dashed var(--line);margin-top:11px;padding-top:11px;">
+      <span class="section-label">採用品</span>
+      <div class="m-sub">チェックした製剤だけを候補に出します。1つもチェックしなければ全製剤が候補になります。水剤MIX調製計算の候補にも反映されます。</div>
+      <input type="text" id="adSearch" placeholder="製剤名で検索してチェック" autocomplete="off">
+      <div id="adList"></div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn ghost small" id="adClear" type="button">すべて解除</button>
+      </div>
+    </div>
+    <div style="border-top:1px dashed var(--line);margin-top:11px;padding-top:11px;">
       <span class="section-label">同薬効グループ</span>
       <div class="m-sub">同じ体重での標準量を並べて比較できるグループです。</div>
       <div id="groupList"></div>
@@ -488,6 +497,10 @@ let DRUGS=(function(){
   return JSON.parse(JSON.stringify(DEFAULT_DRUGS));
 })();
 
+let ADOPTED=(function(){
+  if(_shared&&Array.isArray(_shared.adopted)) return _shared.adopted.slice();
+  return [];
+})();
 let GROUPS=(function(){
   if(_shared&&Array.isArray(_shared.groups)&&_shared.groups.length) return _shared.groups;
   return JSON.parse(JSON.stringify(DEFAULT_GROUPS));
@@ -510,7 +523,8 @@ let st={ weight:'', stepTab:0.5, recent:[], rps:[newRp()] };
 function saveState(){ lsSet(LS_S, JSON.stringify(st)); }
 function saveShared(){
   lsSet(LS_SHARED, JSON.stringify({
-    version:1, updatedAt:new Date().toISOString(), drugs:DRUGS, groups:GROUPS
+    version:1, updatedAt:new Date().toISOString(),
+    drugs:DRUGS, groups:GROUPS, adopted:ADOPTED
   }));
 }
 function saveMaster(){ saveShared(); }
@@ -960,7 +974,18 @@ function renderPickList(){
   }else if(pickAll){ list=DRUGS.slice(); mode='all'; }
   else{
     list=st.recent.map(function(id){return getDrug(id);}).filter(Boolean).slice(0,10);
-    mode='recent';
+    const ad=adoptedDrugIds();
+    if(ad){
+      const have={};
+      list.forEach(function(d){ have[d.id]=1; });
+      ad.forEach(function(id){
+        const d=getDrug(id);
+        if(d&&!have[id]&&list.length<24){ list.push(d); have[id]=1; }
+      });
+      mode='adopted';
+    }else{
+      mode='recent';
+    }
   }
   if(!list.length) host.innerHTML='<span class="empty">該当なし</span>';
   list.slice(0,60).forEach(function(d){
@@ -980,7 +1005,9 @@ function renderPickList(){
     host.appendChild(m);
   }
   hint.textContent = q?(list.length+'件')
-    :(mode==='all'?'全件表示中':(st.recent.length?'最近使った薬剤':'検索するか「すべて」から選択'));
+    :(mode==='all'?'全件表示中'
+      :(mode==='adopted'?'最近使った薬剤・採用品'
+        :(st.recent.length?'最近使った薬剤':'検索するか「すべて」から選択')));
 }
 let pickAll=false;
 
@@ -1207,6 +1234,61 @@ function bandLabel(a0,a1){
   return s1?(s0+'以上'+s1+'未満'):(s0+'以上');
 }
 
+/* ================= 採用品の設定 ================= */
+function allForms(){
+  const out=[];
+  DRUGS.forEach(function(d){
+    (d.forms||[]).forEach(function(f){ out.push({d:d, f:f}); });
+  });
+  return out;
+}
+function isAdopted(name){ return ADOPTED.indexOf(name)>=0; }
+function toggleAdopted(name){
+  const i=ADOPTED.indexOf(name);
+  if(i>=0) ADOPTED.splice(i,1); else ADOPTED.push(name);
+  saveShared();
+}
+function adoptedDrugIds(){
+  if(!ADOPTED.length) return null;
+  const ids=[];
+  DRUGS.forEach(function(d){
+    if((d.forms||[]).some(function(f){ return isAdopted(f.n); })) ids.push(d.id);
+  });
+  return ids;
+}
+function renderAdopted(){
+  const host=$('adList'); if(!host) return;
+  const q=norm($('adSearch').value);
+  let list;
+  if(q){
+    list=allForms().filter(function(x){
+      return norm(x.f.n+' '+x.d.name+' '+(x.d.k||'')+' '+(x.d.r||'')).indexOf(q)>=0;
+    }).slice(0,40);
+  }else{
+    list=allForms().filter(function(x){ return isAdopted(x.f.n); });
+  }
+  let h='';
+  if(!list.length){
+    h='<div class="m-sub" style="margin-top:8px;">'+
+      (q?'該当する製剤がありません':'まだ採用品が選ばれていません。検索してチェックしてください（未設定なら全製剤が候補になります）。')+
+      '</div>';
+  }else{
+    list.forEach(function(x){
+      h+='<label class="g-check"><input type="checkbox" data-ad="'+x.f.n.replace(/"/g,'&quot;')+'"'+
+         (isAdopted(x.f.n)?' checked':'')+'>'+
+         '<span>'+x.f.n+'<span style="color:var(--mute);font-size:11px;">　'+x.d.name+'</span></span></label>';
+    });
+  }
+  h+='<div class="m-sub" style="margin-top:6px;">採用 '+ADOPTED.length+' 製剤</div>';
+  host.innerHTML=h;
+  host.querySelectorAll('[data-ad]').forEach(function(el){
+    el.addEventListener('change',function(){
+      toggleAdopted(el.dataset.ad);
+      renderAdopted(); renderRps();
+    });
+  });
+}
+
 /* ================= グループ編集 ================= */
 function renderGroupList(){
   const host=$('groupList'); host.innerHTML='';
@@ -1303,7 +1385,7 @@ function exportMaster(){
   const now=new Date();
   const pad=function(n){return ('0'+n).slice(-2);};
   const stamp=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate());
-  const data={app:'dfconv', version:1, exportedAt:now.toISOString(), drugs:DRUGS, groups:GROUPS};
+  const data={app:'dfconv', version:1, exportedAt:now.toISOString(), drugs:DRUGS, groups:GROUPS, adopted:ADOPTED};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -1329,7 +1411,7 @@ function validGroups(arr){
   });
   return out.length?out:null;
 }
-function showImportChoice(list, label, groups){
+function showImportChoice(list, label, groups, adopted){
   const slot=$('mImportSlot'); slot.innerHTML='';
   const box=document.createElement('div'); box.className='m-form';
   const dup=list.filter(function(d){
@@ -1347,7 +1429,7 @@ function showImportChoice(list, label, groups){
   box.querySelectorAll('button').forEach(function(b){
     b.addEventListener('click',function(){
       const a=b.dataset.a;
-      if(a==='rep'){ DRUGS=list; if(groups){GROUPS=groups;} toast('置き換えました'); }
+      if(a==='rep'){ DRUGS=list; if(groups){GROUPS=groups;} if(adopted){ADOPTED=adopted;} toast('置き換えました'); }
       else if(a==='add'){
         let n=0;
         list.forEach(function(d){
@@ -1380,12 +1462,14 @@ function fetchDefaults(silent){
     const list=pickDrugs(j);
     if(!list) throw new Error('bad format');
     const gs=validGroups(j&&j.groups);
+    const ad=(j&&Array.isArray(j.adopted))?j.adopted.map(String):null;
     if(silent){
       DRUGS=list; MASTER_IS_BUILTIN=false;
       if(gs){ GROUPS=gs; }
+      if(ad){ ADOPTED=ad; }
       saveShared(); renderRps();
     }else{
-      showImportChoice(list,'共通マスタ（drug-master.json）',gs);
+      showImportChoice(list,'共通マスタ（drug-master.json）',gs,ad);
     }
     return true;
   }).catch(function(){
@@ -1410,13 +1494,19 @@ $('sheet').addEventListener('click',function(e){ if(e.target===this) closePicker
 $('cfgToggle').addEventListener('click',function(){
   const p=$('cfgPanel'); p.classList.toggle('open');
   this.textContent=p.classList.contains('open')?'閉じる':'開く';
-  if(p.classList.contains('open')){ renderMasterList(); renderGroupList(); }
+  if(p.classList.contains('open')){ renderMasterList(); renderGroupList(); renderAdopted(); }
 });
 $('mAddBtn').addEventListener('click',function(){openDrugForm(-1);});
 $('mResetBtn').addEventListener('click',function(){
   if(!window.confirm('薬剤マスタを初期データに戻します。よろしいですか？'))return;
   DRUGS=JSON.parse(JSON.stringify(DEFAULT_DRUGS));
   saveMaster();renderMasterList();renderRps();toast('初期データに戻しました');
+});
+$('adSearch').addEventListener('input',renderAdopted);
+$('adClear').addEventListener('click',function(){
+  if(!ADOPTED.length) return;
+  if(!window.confirm('採用品の設定をすべて解除しますか？（全製剤が候補に戻ります）'))return;
+  ADOPTED=[]; saveShared(); renderAdopted(); renderRps(); toast('解除しました');
 });
 $('gAddBtn').addEventListener('click',function(){openGroupForm(-1);});
 $('gResetBtn').addEventListener('click',function(){
@@ -1432,9 +1522,11 @@ $('mFile').addEventListener('change',function(){
   const rd=new FileReader();
   rd.onload=function(){
     let list=null, gs=null;
-    try{ const j=JSON.parse(rd.result); list=pickDrugs(j); gs=validGroups(j&&j.groups); }catch(e){}
+    let ad=null;
+    try{ const j=JSON.parse(rd.result); list=pickDrugs(j); gs=validGroups(j&&j.groups);
+         if(j&&Array.isArray(j.adopted)) ad=j.adopted.map(String); }catch(e){}
     if(!list){ toast('読み込めるマスタが入っていません'); return; }
-    showImportChoice(list, f.name, gs);
+    showImportChoice(list, f.name, gs, ad);
   };
   rd.readAsText(f);
 });
