@@ -258,7 +258,7 @@
   }
   .name-chip:active{background:var(--accent-soft);}
   .name-chip.more{border-style:dashed;color:var(--accent);font-weight:700;}
-  .name-chips-empty{font-size:11.5px;color:var(--mute);padding:2px 0 4px;}
+  .name-chips-empty{font-size:11.5px;color:var(--mute,#a49d8c);padding:2px 0 4px;}
 
   .dose-row{
     display:flex;
@@ -1473,6 +1473,64 @@
   let rpList = [ cloneRpState(state) ];
   let activeRpIndex = 0;
 
+  /* ===================================================================
+     入力中の内容（全Rp・年齢・体重）を端末に保存し、閉じても再読込しても復元する。
+     「クリア」を押したときだけ消える。
+     =================================================================== */
+  const SESSION_KEY = 'mixCalcSession_v1';
+  let sessionReady = false;   // 復元が終わるまでは保存しない（初期値で上書きしないため）
+
+  function saveSession(){
+    if(!sessionReady) return;
+    try{
+      rpList[activeRpIndex] = cloneRpState(state);
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        v: 1,
+        savedAt: new Date().toISOString(),
+        rpList: rpList,
+        activeRpIndex: activeRpIndex,
+        patient: {age: patient.age, weight: patient.weight, ageUnit: patient.ageUnit}
+      }));
+    }catch(e){ /* 保存できなくても計算は続けられる */ }
+  }
+
+  function validRp(r){
+    if(!r || !Array.isArray(r.drugs)) return null;
+    const n = (v, d)=> (typeof v === 'number' && isFinite(v) && v > 0) ? v : d;
+    const drugs = r.drugs.map(d=>({
+      name: (d && typeof d.name === 'string') ? d.name : '',
+      perDay: (d && typeof d.perDay === 'number' && isFinite(d.perDay)) ? d.perDay : null
+    }));
+    while(drugs.length < 2) drugs.push({name:'', perDay:null});
+    return {div: n(r.div, 3), days: n(r.days, 7), round: n(r.round, state.round), drugs: drugs};
+  }
+
+  (function restoreSession(){
+    let o = null;
+    try{ o = JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){}
+    if(o && Array.isArray(o.rpList) && o.rpList.length){
+      const list = o.rpList.map(validRp).filter(Boolean);
+      if(list.length){
+        rpList = list;
+        activeRpIndex = Math.min(Math.max(0, o.activeRpIndex|0), list.length - 1);
+        const a = cloneRpState(rpList[activeRpIndex]);
+        state.div = a.div; state.days = a.days; state.round = a.round; state.drugs = a.drugs;
+      }
+      if(o.patient){
+        const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+        patient.age = num(o.patient.age);
+        patient.weight = num(o.patient.weight);
+        patient.ageUnit = (o.patient.ageUnit === 'month') ? 'month' : 'year';
+      }
+    }
+  })();
+
+  // 閉じる・別アプリに切り替える直前にも念のため保存
+  window.addEventListener('pagehide', saveSession);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'hidden') saveSession();
+  });
+
   let NAME_SUGGESTIONS = (Array.isArray(saved.suggestions) && saved.suggestions.length > 0)
     ? saved.suggestions.slice()
     : DEFAULT_SUGGESTIONS.slice();
@@ -1670,8 +1728,10 @@
     }
   }
 
-  // 保存されていた丸め幅を反映
+  // 保存されていた丸め幅・分割・日数を反映
   syncChipUI('roundChips','roundCustom', state.round);
+  syncChipUI('divChips','divCustom', state.div);
+  syncChipUI('dayChips','dayCustom', state.days);
 
   // ---------- 患者情報（年齢・体重） ----------
   const patientAgeInput = document.getElementById('patientAge');
@@ -1681,6 +1741,17 @@
   attachSelectOnFocus(patientAgeInput);
   attachSelectOnFocus(patientWeightInput);
 
+  // 復元した年齢・体重を入力欄に表示
+  function syncPatientUI(){
+    ageUnitToggle.querySelectorAll('.age-unit-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.unit === patient.ageUnit);
+    });
+    patientAgeInput.value = (patient.age != null)
+      ? formatNum(patient.ageUnit === 'month' ? patient.age * 12 : patient.age) : '';
+    patientWeightInput.value = (patient.weight != null) ? formatNum(patient.weight) : '';
+  }
+  syncPatientUI();
+
   // 年齢入力欄は表示単位（歳／ヶ月）に応じて値を解釈する。内部(patient.age)は常に「歳」で保持。
   patientAgeInput.addEventListener('input', (e)=>{
     const v = parseFloat(e.target.value);
@@ -1689,12 +1760,14 @@
     } else {
       patient.age = (patient.ageUnit === 'month') ? (v / 12) : v;
     }
+    saveSession();
     updateDrugCardDisplays(); // 薬剤カード内のタイムライン（該当区分マーカー）にも反映
     renderResult();
   });
   patientWeightInput.addEventListener('input', (e)=>{
     const v = parseFloat(e.target.value);
     patient.weight = isNaN(v) ? null : v;
+    saveSession();
     updateDrugCardDisplays(); // 体重換算表示にも反映
     renderResult();
   });
@@ -1713,6 +1786,7 @@
         const displayVal = (unit === 'month') ? (patient.age * 12) : patient.age;
         patientAgeInput.value = formatNum(displayVal);
       }
+      saveSession();
       updateDrugCardDisplays();
       renderResult();
     });
@@ -1730,6 +1804,7 @@
   function syncActiveRpSnapshot(){
     rpList[activeRpIndex] = cloneRpState(state);
     if(typeof renderRpTabs === 'function'){ renderRpTabs(); }
+    saveSession();
   }
 
   // ---------- 薬剤カード描画 ----------
@@ -2834,6 +2909,7 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
     renderRpTabs();
     renderDrugCards();
     renderResult();
+    saveSession();
   }
 
   // ---------- Rp（処方）タブ ----------
@@ -2938,15 +3014,24 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
   });
 
   rpClearBtn.addEventListener('click', ()=>{
-    const hasContent = rpHasContent(state);
-    if(hasContent && !confirm(`Rp${activeRpIndex+1}の入力内容をクリアしますか？（他のRpの内容は残ります）`)) return;
+    rpList[activeRpIndex] = cloneRpState(state);
+    const anyContent = rpList.some(rpHasContent) || rpList.some(r=>r.drugs.some(d=>d.name))
+                    || patient.age != null || patient.weight != null || rpList.length > 1;
+    const msg = (rpList.length > 1)
+      ? `すべてのRp（Rp1〜Rp${rpList.length}）と年齢・体重をクリアしますか？`
+      : '入力内容と年齢・体重をクリアしますか？';
+    if(anyContent && !confirm(msg)) return;
 
     const cleared = freshRpState();
     state.div = cleared.div;
     state.days = cleared.days;
     state.round = cleared.round;
     state.drugs = cleared.drugs;
-    rpList[activeRpIndex] = cloneRpState(state);
+    rpList = [ cloneRpState(state) ];
+    activeRpIndex = 0;
+    patient.age = null;
+    patient.weight = null;
+    syncPatientUI();
 
     syncChipUI('divChips','divCustom', state.div);
     syncChipUI('dayChips','dayCustom', state.days);
@@ -2957,6 +3042,7 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
     if(firstInput) firstInput.focus();
   });
 
+  sessionReady = true;   // ここから保存を有効化（復元済みの内容で初回描画）
   render();
 
   // 初回ロード時、1つ目の薬剤の1日量入力に自動フォーカス（入力を即座に始められるように）
