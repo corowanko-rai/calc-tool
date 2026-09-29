@@ -700,6 +700,9 @@ function badgeHtml(f){
 function groupPanelHtml(rp, it, d){
   const g=groupOf(it.drugId);
   if(!g) return '';
+  // 入力中の薬剤は上の換算欄に出ているので、グループからは外す
+  const others=(g.ids||[]).filter(function(id){ return id!==it.drugId && getDrug(id); });
+  if(!others.length) return '';
   let h='<div class="grp-toggle" data-grp="1">'+(it.grpOpen?'▲ ':'▼ ')+'同薬効グループ「'+g.name+'」の標準量</div>';
   if(!it.grpOpen) return h;
   const ew=effectiveWeight();
@@ -712,10 +715,10 @@ function groupPanelHtml(rp, it, d){
      (wide?'。幅は体重の範囲によるものです':'')+'</div>';
 
   // 参考用量のある成分を先に、未設定のものを後ろにまとめる
-  const ids=(g.ids||[]).slice();
+  const ids=others.slice();
   const withDose=ids.filter(function(id){ const x=getDrug(id); return x&&x.dmin!==undefined; });
   const noDose  =ids.filter(function(id){ const x=getDrug(id); return x&&x.dmin===undefined; });
-  const open = Array.isArray(it.gOpen) ? it.gOpen : [it.drugId];
+  const open = Array.isArray(it.gOpen) ? it.gOpen : [];
 
   withDose.concat(noDose).forEach(function(id){
     const dd=getDrug(id); if(!dd) return;
@@ -901,7 +904,7 @@ function buildItem(rp, ri, it, ii){
     res.querySelectorAll('[data-gd]').forEach(function(el){
       el.addEventListener('click',function(){
         const id=el.dataset.gd;
-        const cur=Array.isArray(it.gOpen)?it.gOpen.slice():[it.drugId];
+        const cur=Array.isArray(it.gOpen)?it.gOpen.slice():[];
         const i=cur.indexOf(id);
         if(i>=0) cur.splice(i,1); else cur.push(id);
         it.gOpen=cur; saveState(); refresh();
