@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<!-- 自分のオリジンのファイル以外は読み込まない。画面への文字列の直接書き込み（innerHTML等）も禁止（Trusted Types） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types drill-sw">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a4a40">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="監査ドリル">
+<title>処方監査ドリル</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script src="core.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ======================= ホーム ======================= -->
+<section id="home" class="screen">
+  <h1><span class="mark"></span>処方監査ドリル<small>Prescription Audit Drill</small></h1>
+
+  <div id="banner" class="notice" hidden></div>
+
+  <div class="card start-card">
+    <button id="startBtn" class="btn big" type="button">スタート</button>
+    <div class="start-meta" id="startMeta"></div>
+    <div class="srs" id="srsSummary"></div>
+  </div>
+
+  <div class="card">
+    <span class="section-label">出題パターン</span>
+    <div class="chips" id="patChips"></div>
+    <div class="row"><div class="lb">回答</div><div class="seg" id="modeSeg"></div></div>
+    <div class="row"><div class="lb">問題数</div><div class="seg" id="nSeg"></div></div>
+    <div class="row"><div class="lb">出題範囲</div><div class="seg" id="scopeSeg"></div></div>
+    <div class="hint" id="hintNote"></div>
+  </div>
+
+  <div class="card">
+    <span class="section-label">出題する薬</span>
+    <div class="row"><div class="lb">範囲</div><div class="seg" id="useGroupSeg"></div></div>
+    <div id="groupBox" hidden></div>
+    <div class="row between">
+      <span class="hint flat" id="excludeInfo"></span>
+      <button class="btn ghost small auto" id="drugsBtn" type="button">出題する薬を選ぶ</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <details class="basis" id="ratioBox">
+      <summary class="section-label">出題の比率</summary>
+      <span class="section-label sub">パターンの比率（1セットの中の問題数の割合）</span>
+      <div id="weightRows"></div>
+      <span class="section-label sub">問題の中身の割合</span>
+      <div id="rateRows"></div>
+      <div class="btn-row"><button class="btn ghost small" id="ratioReset" type="button">初期値に戻す</button></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <div class="section-label-row">
+      <span class="section-label">記録</span>
+      <button class="link-btn quiet" id="resetBtn" type="button">記録を消去</button>
+    </div>
+    <div id="bestBox" class="best-box"></div>
+    <div id="histBox"></div>
+    <span class="section-label sub">苦手（覚えている確率が低い順）</span>
+    <div id="weakBox"></div>
+  </div>
+
+  <div class="card">
+    <details class="basis">
+      <summary class="section-label">判定基準と根拠</summary>
+      <p><b>正解の値</b>：共通の薬剤マスタ（各薬剤の電子添文〔PMDA〕の用法及び用量から登録）の小児用量・含量・年齢区分で計算します。数値は1%以内、または表示桁の半分以内のずれを正解とします。</p>
+      <p><b>監査判定（少ない／適正／多い）</b>：適正は添付文書の範囲どおりの量（±5%以内）、少ないは下限の20〜70%、多いは上限の140〜250%または10倍量として出題します（年齢区分の薬は隣の年齢区分の量も出します）。範囲からわずかに外れた量は現場で判断が分かれるため出題しません。どちらの読み方（製剤量・成分量）でも範囲に入らない処方は、製剤量として読んで判定します。</p>
+      <p><b>上限（成人量など）</b>：体重あたりで計算した量が上限を超える大きい子では、上限までが適正です。監査判定（上限がある薬）の約1割に、体重あたりは範囲内でも上限を超える処方（多い）と、上限どおりの処方（適正）がまぎれています。上限には許容差がなく、少しでも超えていれば「多い」です。上限は添付文書の成人の通常量（1日量・1回量）で、小児の上限が書かれている薬（トスフロキサシン、ドンペリドンなど）はその値です。重症時の増量や最高量（例：ゾニサミド 最高12mg/kg/日）の範囲の量は、多いとしては出題しません。</p>
+      <p><b>剤形の対象年齢</b>：添付文書で対象年齢が決まっている製剤（例：アレグラ錠30mgは7歳以上、キプレス細粒は1〜6歳未満）は、その年齢の問題だけに使います。小児の用法がない製剤（成人用）は、体重・年齢を使う問題には出しません。</p>
+      <p><b>実務の注意の目安（水剤MIX・剤形変更換算）</b>：処方の体重あたり量が添付文書の範囲から10%を超えて外れたら注意。小児の投与量エラーの研究で、推奨1日量の上限の110%以上、または下限の90%未満をエラーと定義しているものによります（Aseeri MA. <i>J Pediatr Pharmacol Ther</i> 2013;18(3):220-226。定義の出典として McPhillips HA, et al. <i>J Pediatr</i> 2005;147(6):761-767 を引用）。救急外来の研究では10〜25%、病院前救護の研究では20%以上が使われています（Hoyle JD Jr, et al. <i>Prehosp Emerg Care</i> 2012;16(1):59-66）。</p>
+      <p><b>体重の範囲</b>：体重は3kgから、ふだんは上限に届かない範囲で出します。上限の問題（計算問題の一部・監査判定の一部）では、上限を超える体重を55kg（15歳の平均体重くらい）まで出します。「体重あたりは○歳未満」の薬（プロカテロールなど）や対象年齢のある製剤は、その年齢の平均体重（令和6年度学校保健統計・全国、男女平均）に合わせています。</p>
+      <p><b>出題の順番</b>：「出題の比率」のパターンの比率で1セットの問題数を割り振り、各パターンの中では間隔反復（FSRS-6、py-fsrs の既定値）で忘れかけた問題を優先します。同じ薬・同じパターンが続かないよう交互に並べます。</p>
+      <p><b>グループの定着率</b>：グループの問題を覚えている確率（間隔反復の想起率）の平均です。まだ出していない問題は0%として数えます。出題中のグループがすべて目安を超えると、次のグループを加えるか尋ねます。</p>
+      <p class="hint">いずれも練習用です。実際の監査は添付文書と施設の基準によります。</p>
+    </details>
+  </div>
+
+  <div class="card">
+    <span class="section-label">共通の薬剤マスタ</span>
+    <div id="masterInfo" class="hint"></div>
+    <div class="btn-row">
+      <button class="btn ghost small" id="reloadBtn" type="button">最新を読み込む</button>
+      <a class="btn ghost small" href="../dfconv/">剤形変更換算で編集</a>
+    </div>
+  </div>
+
+  <footer>
+    計算練習用です。実際の監査は添付文書・施設の基準で確認してください。<br>
+    学習記録はこの端末内にのみ保存され、外部には送信されません。
+  </footer>
+</section>
+
+<!-- ======================= 薬を選ぶ（グループの編集・出題する薬） ======================= -->
+<section id="pick" class="screen" hidden>
+  <div class="pick-head">
+    <button id="pickBack" class="icon-btn" type="button" aria-label="戻る">←</button>
+    <h1 class="pick-h1" id="pickTitle">グループを作る</h1>
+  </div>
+  <div class="card">
+    <div id="pickNameBox">
+      <label class="section-label" for="pickName">グループ名</label>
+      <input type="text" id="pickName" class="tin" maxlength="30" autocomplete="off">
+    </div>
+    <div class="hint" id="pickLead"></div>
+    <input type="search" id="pickSearch" class="tin" placeholder="薬・製剤の名前で探す" autocomplete="off" aria-label="薬を探す">
+    <div class="chips small-chips" id="pickFilter" aria-label="薬効で絞る"></div>
+    <div class="row between">
+      <span class="hint flat" id="pickCount"></span>
+      <span>
+        <button class="link-btn" id="pickAllOn" type="button">表示中をすべて選ぶ</button>
+        <button class="link-btn quiet" id="pickAllOff" type="button">すべて外す</button>
+      </span>
+    </div>
+    <div class="dlist" id="pickList"></div>
+    <div class="btn-row">
+      <button class="btn" id="pickSave" type="button">保存</button>
+      <button class="btn ghost" id="pickCancel" type="button">キャンセル</button>
+    </div>
+    <div class="del-row"><button class="link-btn quiet" id="pickDel" type="button">このグループを削除</button></div>
+  </div>
+</section>
+
+<!-- ======================= 出題 ======================= -->
+<section id="quiz" class="screen quiz" hidden>
+  <header class="qbar">
+    <button id="quitBtn" class="icon-btn" type="button" aria-label="中断してホームへ">✕</button>
+    <div class="prog">
+      <div class="prog-n"><span id="phase"></span><span id="qNo">1</span> / <span id="qN">10</span></div>
+      <div class="pbar"><i id="pFill"></i></div>
+    </div>
+    <div class="timer" id="timer" aria-hidden="true">0.0</div>
+  </header>
+
+  <div class="qcard">
+    <div class="qtop"><span class="pchip" id="qPat"></span><span class="qsub" id="qSub"></span></div>
+    <div class="qtitle" id="qTitle"></div>
+    <dl class="facts" id="qFacts"></dl>
+    <div class="ask" id="qAsk"></div>
+  </div>
+
+  <div class="answer" id="ansArea">
+    <div class="display" id="disp"><span class="dv" id="dispVal"></span><span class="du" id="dispUnit"></span></div>
+    <div class="keypad" id="keypad"></div>
+    <div class="choices" id="choices"></div>
+  </div>
+
+  <div class="feedback" id="fb" hidden role="status">
+    <div class="fb-head" id="fbHead"></div>
+    <div class="fb-ans" id="fbAns"></div>
+  </div>
+</section>
+
+<!-- ======================= 結果 ======================= -->
+<section id="result" class="screen" hidden>
+  <h1><span class="mark"></span>結果<small>Result</small></h1>
+  <div class="card result-card">
+    <div class="score" id="rScore"></div>
+    <div class="score-sub" id="rSub"></div>
+    <div class="best-flag" id="rBest"></div>
+    <div class="btn-row">
+      <button class="btn" id="againBtn" type="button">もう一度</button>
+      <button class="btn ghost" id="homeBtn" type="button">ホーム</button>
+    </div>
+  </div>
+  <div class="card">
+    <span class="section-label">振り返り（解説）</span>
+    <div id="rList"></div>
+  </div>
+  <div class="card" id="rReviewCard" hidden>
+    <span class="section-label">復習（間違えた薬をもう一度・タイム外）</span>
+    <div id="rReview"></div>
+  </div>
+</section>
+
+</div>
+<div class="toast" id="toast" role="status"></div>
+</body>
+</html>

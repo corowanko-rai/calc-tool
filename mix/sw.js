@@ -1,16 +1,17 @@
 // 水剤MIX調製計算 Service Worker
 //
 // 方針:
-// - HTML本体と defaults.json は「ネットワーク優先」。更新をすぐ反映させるため。
+// - HTML本体・app.js・defaults.json は「ネットワーク優先」。更新をすぐ反映させるため。
 //   オフライン時のみキャッシュにフォールバックする。
 // - アイコンなど変化しないファイルは「キャッシュ優先」で高速起動。
 //
 // アプリを更新したらCACHE_NAMEの数字を上げること（古いキャッシュが自動で破棄される）。
 
-const CACHE_NAME = 'mix-calc-v2';
+const CACHE_NAME = 'mix-calc-v3';
 const APP_SHELL = [
   './',
   './index.html',
+  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -31,7 +32,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        // 自分の古いキャッシュだけ消す（ドリル・剤形変更換算など他のアプリのキャッシュには触れない）
+        keys.filter(k => k.indexOf('mix-calc-') === 0 && k !== CACHE_NAME).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
@@ -76,8 +78,9 @@ self.addEventListener('fetch', (event) => {
     || path.endsWith('/')
     || path.endsWith('.html');
   const isJson = path.endsWith('.json');
+  const isJs = path.endsWith('.js');   // app.js は画面と同じ版を使うためネットワーク優先
 
-  if (isHtml || isJson) {
+  if (isHtml || isJson || isJs) {
     event.respondWith(networkFirst(req));
   } else {
     event.respondWith(cacheFirst(req));

@@ -1,7 +1,7 @@
 /* 剤形変更 換算 — Service Worker */
 const CACHE = 'dfconv-v1';
 const ASSETS = [
-  './', './index.html', './manifest.json',
+  './', './index.html', './app.js', './manifest.json',
   './icon-192.png', './icon-512.png',
   './icon-192-maskable.png', './icon-512-maskable.png',
   './apple-touch-icon.png'
@@ -15,7 +15,8 @@ self.addEventListener('install', function(e){
 
 self.addEventListener('activate', function(e){
   e.waitUntil(caches.keys().then(function(keys){
-    return Promise.all(keys.filter(function(k){ return k !== CACHE; })
+    // 自分の古いキャッシュだけ消す（ドリル・水剤MIXなど他のアプリのキャッシュには触れない）
+    return Promise.all(keys.filter(function(k){ return k.indexOf('dfconv-') === 0 && k !== CACHE; })
                           .map(function(k){ return caches.delete(k); }));
   }).then(function(){ return self.clients.claim(); }));
 });
