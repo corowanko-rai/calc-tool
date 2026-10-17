@@ -101,6 +101,27 @@
     } catch (e) { return null; }
   }
   function loadLocalMaster() { const raw = loadLocalRaw(); return raw ? C.sanitizeMaster(raw) : null; }
+  // 重複を一本化した成分（旧ID→残したID）に合わせて、グループ・出題しない薬・学習記録のIDを付け替える
+  function applyAliases(raw) {
+    const al = raw && raw.aliases && typeof raw.aliases === 'object' ? raw.aliases : null;
+    if (!al) return;
+    const to = function (x) { return Object.prototype.hasOwnProperty.call(al, x) ? String(al[x]) : x; };
+    const uniq = function (list) { const o = []; list.forEach(function (x) { x = to(x); if (o.indexOf(x) < 0) o.push(x); }); return o; };
+    let changed = false;
+    store.groups.forEach(function (g) {
+      const n = uniq(g.ids); if (n.join('\n') !== g.ids.join('\n')) { g.ids = n; changed = true; }
+    });
+    const ex = uniq(store.settings.exclude);
+    if (ex.join('\n') !== store.settings.exclude.join('\n')) { store.settings.exclude = ex; changed = true; }
+    Object.keys(store.cards).forEach(function (k) {
+      const p = k.split('|'); if (p.length !== 3) return;
+      const id = to(p[1]); if (id === p[1]) return;
+      const nk = p[0] + '|' + id + '|' + p[2];
+      if (!store.cards[nk]) store.cards[nk] = store.cards[k];
+      delete store.cards[k]; changed = true;
+    });
+    if (changed) save();
+  }
   function fetchMasterFile() {
     if (typeof fetch !== 'function' || location.protocol.indexOf('http') !== 0) return Promise.resolve(null);
     return fetch('../drug-master.json?t=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
@@ -120,6 +141,7 @@
   function initMaster(manual) {
     const raw = loadLocalRaw();
     const local = raw ? C.sanitizeMaster(raw) : null;
+    applyAliases(raw);
     if (local) setMaster(local, 'local');
     else if (!master) setMaster(C.sanitizeMaster(C.SAMPLE_MASTER), 'sample');
     renderHome();
@@ -131,6 +153,7 @@
       const m = C.sanitizeMaster(merged);
       if (!m) return;
       lsSet(MASTER_KEY, JSON.stringify(merged));
+      applyAliases(merged);
       setMaster(m, 'local');
       renderHome();
       toast(raw ? '共通マスタを最新版に更新しました' : '共通マスタを取り込みました');
@@ -139,6 +162,7 @@
   // 剤形変更換算で編集・保存されたら（別タブ）、その場で反映
   window.addEventListener('storage', function (e) {
     if (e.key === MASTER_KEY) {
+      applyAliases(loadLocalRaw());
       const m = loadLocalMaster();
       if (m) { setMaster(m, 'local'); if (!sess) renderHome(); }
     }

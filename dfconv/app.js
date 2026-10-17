@@ -98,7 +98,8 @@ const META={
   editedIds: (_shared&&Array.isArray(_shared.editedIds))?_shared.editedIds.map(String):[],
   deletedIds: (_shared&&Array.isArray(_shared.deletedIds))?_shared.deletedIds.map(String):[],
   groupsEdited: !!(_shared&&_shared.groupsEdited),
-  schema: (_shared&&Number(_shared.schema))||0
+  schema: (_shared&&Number(_shared.schema))||0,
+  aliases: (_shared&&_shared.aliases&&typeof _shared.aliases==='object')?_shared.aliases:{}
 };
 function markEdited(id){ id=String(id); if(META.editedIds.indexOf(id)<0) META.editedIds.push(id);
   META.deletedIds=META.deletedIds.filter(function(x){return x!==id;}); }
@@ -125,7 +126,7 @@ function saveShared(){
     version:1, updatedAt:new Date().toISOString(),
     drugs:DRUGS, groups:GROUPS, adopted:ADOPTED,
     baseRev:META.baseRev, editedIds:META.editedIds, deletedIds:META.deletedIds, groupsEdited:META.groupsEdited,
-    schema:META.schema
+    schema:META.schema, aliases:META.aliases
   }));
 }
 function saveMaster(){ saveShared(); }
@@ -1352,7 +1353,7 @@ renderRps();
    ・端末で追加した成分（ファイルにない id）も残す
    ・採用品は端末の設定を優先。薬効グループは端末で編集していなければファイルに合わせる */
 // マスタの項目の版。古い版のアプリが新しい項目（上限・対象年齢など）を落として取り込んだ端末でも、同じ rev のまま取り込み直せるようにする
-var MASTER_SCHEMA = 3;
+var MASTER_SCHEMA = 4;
 function mergeDistributedMaster(local, file){
   var rev = Number(file && file.rev) || 0;
   var fdrugs = (file && Array.isArray(file.drugs)) ? file.drugs.filter(function(d){ return d && typeof d === 'object' && d.id != null && Array.isArray(d.forms); }) : [];
@@ -1373,17 +1374,33 @@ function mergeDistributedMaster(local, file){
     if(deleted.indexOf(id) >= 0) return;
     drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? byId[id] : fd);
   });
-  local.drugs.forEach(function(ld){ if(ld && ld.id != null && !inFile[String(ld.id)]) drugs.push(ld); });
+  // 端末だけにある成分のうち、配布マスタに同じ名前の成分があるものは配布の方に一本化する（同じ薬が2つ並ばないように）
+  var nm = function(x){ return String(x || '').normalize('NFKC').replace(/\s+/g, ''); };
+  var byName = {}; drugs.forEach(function(d){ byName[nm(d.name)] = String(d.id); });
+  var alias = (local.aliases && typeof local.aliases === 'object') ? local.aliases : {};
+  local.drugs.forEach(function(ld){
+    if(!ld || ld.id == null || inFile[String(ld.id)]) return;
+    var same = byName[nm(ld.name)];
+    if(same){ alias[String(ld.id)] = same; return; }
+    byName[nm(ld.name)] = String(ld.id); drugs.push(ld);
+  });
+  var fix = function(ids){ var o = []; (Array.isArray(ids) ? ids : []).forEach(function(i){ var k = alias[String(i)] || String(i); if(o.indexOf(k) < 0) o.push(k); }); return o; };
   var lg = Array.isArray(local.groups) ? local.groups : [];
   var base = local.groupsEdited ? lg : fgroups, extra = local.groupsEdited ? fgroups : lg;
-  var groups = base.slice();
-  extra.forEach(function(g){ if(g && !groups.some(function(x){ return x && x.id === g.id; })) groups.push(g); });
+  var groups = [];
+  // 同じ名前のグループは1つにまとめる（端末のグループ同士は成分を合わせ、配布の同名グループは足さない）
+  base.concat(extra).forEach(function(g, i){
+    if(!g || typeof g !== 'object') return;
+    var hit = null; groups.forEach(function(x){ if(!hit && (x.id === g.id || nm(x.name) === nm(g.name))) hit = x; });
+    if(hit){ if(i < base.length) hit.ids = fix(hit.ids.concat(Array.isArray(g.ids) ? g.ids : [])); return; }
+    var c = {}; Object.keys(g).forEach(function(k){ c[k] = g[k]; }); c.ids = fix(g.ids); groups.push(c);
+  });
   var adopted = (Array.isArray(local.adopted) && local.adopted.length) ? local.adopted
               : ((file && Array.isArray(file.adopted)) ? file.adopted : []);
   var out = {};
   Object.keys(local).forEach(function(k){ out[k] = local[k]; });
   out.version = 1; out.updatedAt = now; out.drugs = drugs; out.groups = groups; out.adopted = adopted;
-  out.baseRev = rev; out.editedIds = edited; out.deletedIds = deleted; out.schema = MASTER_SCHEMA;
+  out.baseRev = rev; out.editedIds = edited; out.deletedIds = deleted; out.schema = MASTER_SCHEMA; out.aliases = alias;
   return out;
 }
 
@@ -1397,10 +1414,15 @@ function autoUpdateMaster(){
     if(!rev||rev<META.baseRev||(rev===META.baseRev&&META.schema>=MASTER_SCHEMA)) return;
     const list=pickDrugs(j); if(!list) return;
     const merged=mergeDistributedMaster({drugs:DRUGS, groups:GROUPS, adopted:ADOPTED,
-      editedIds:META.editedIds, deletedIds:META.deletedIds, groupsEdited:META.groupsEdited},
+      editedIds:META.editedIds, deletedIds:META.deletedIds, groupsEdited:META.groupsEdited, aliases:META.aliases},
       {rev:rev, drugs:list, groups:validGroups(j.groups)||[], adopted:Array.isArray(j.adopted)?j.adopted.map(function(x){return safeText(x,160);}):[]});
     DRUGS=merged.drugs; GROUPS=merged.groups.length?merged.groups:GROUPS; ADOPTED=merged.adopted; META.baseRev=rev; META.schema=MASTER_SCHEMA;
-    saveShared(); renderRps();
+    META.aliases=merged.aliases||{};
+    // 一本化した成分を使っている処方の行は、残した方の成分に付け替える
+    st.rps.forEach(function(rp){ (rp.items||[]).forEach(function(it){
+      if(it&&Object.prototype.hasOwnProperty.call(META.aliases,String(it.drugId))) it.drugId=META.aliases[String(it.drugId)];
+    }); });
+    saveState(); saveShared(); renderRps();
     if($('cfgPanel').classList.contains('open')){ renderMasterList(); renderGroupList(); renderAdopted(); }
     toast('共通マスタを最新版に更新しました');
   }).catch(function(){});

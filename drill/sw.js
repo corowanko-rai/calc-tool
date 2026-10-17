@@ -2,7 +2,7 @@
    - drill フォルダ内のファイルだけをキャッシュする（他アプリのキャッシュには触れない）
    - 共通マスタ drug-master.json はネット優先、つながらないときだけキャッシュを使う */
 'use strict';
-const VERSION = 'drill-v1.8.1';
+const VERSION = 'drill-v1.8.2';
 const SHELL = [
   './', './index.html', './style.css', './core.js', './app.js', './manifest.json',
   './icon-192.png', './icon-512.png', './icon-192-maskable.png', './icon-512-maskable.png', './apple-touch-icon.png'
