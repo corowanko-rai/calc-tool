@@ -1175,14 +1175,19 @@
     for (let k = 0; used < n && k < rem.length; k++, used++) q[rem[k].p]++;
     return q;
   }
-  // 出題対象の覚え具合：定着率＝想起率の平均（まだ出していない問題は0）
+  // 正答率（これまでの回答のうち正解の割合）。間違えた回数＝lapses
+  function accuracy(c) { return c && c.reps > 0 ? Math.max(0, c.reps - (c.lapses || 0)) / c.reps : 0; }
+  // 前回の回答が正解か（lc がない古い記録は、全部間違いなら不正解とみなす）
+  function lastCorrect(c) { return !!c && (c.lc === 1 || (c.lc === undefined && c.reps > (c.lapses || 0))); }
+  // 定着：前回正解で、いま覚えている確率（想起率）が90%以上。定着率＝定着した問題の割合（まだ出していない問題は未定着）
+  function isMastered(c, now) { return !!c && c.s > 0 && lastCorrect(c) && retrievability(c, now) >= 0.9; }
   function poolStats(pool, cards, now) {
-    let sum = 0, seen = 0;
+    let ok = 0, seen = 0;
     pool.forEach(function (it) {
       const c = cards[it.key];
-      if (c && c.s > 0) { seen++; sum += retrievability(c, now); }
+      if (c && c.s > 0) { seen++; if (isMastered(c, now)) ok++; }
     });
-    return { n: pool.length, seen: seen, mastery: pool.length ? sum / pool.length : 0 };
+    return { n: pool.length, seen: seen, mastered: ok, mastery: pool.length ? ok / pool.length : 0 };
   }
   // 出題の種類（パターン）ごとに均等になるよう、種類を順番に回して並べる。
   // 製剤数の多い「処方量↔製剤量」ばかりにならないようにするため。
@@ -1317,7 +1322,7 @@
     buildPool: buildPool, generate: generate, judge: judge, answerText: answerText, makeChoices: makeChoices,
     parseInput: parseInput, fmt: fmt, tolFor: tolFor,
     retrievability: retrievability, review: review, rate: rate, nextIntervalDays: nextIntervalDays,
-    buildSet: buildSet, poolStats: poolStats, setRates: setRates, RATE_DEFAULTS: RATE_DEFAULTS, WEIGHT_STEPS: WEIGHT_STEPS,
+    buildSet: buildSet, poolStats: poolStats, accuracy: accuracy, isMastered: isMastered, setRates: setRates, RATE_DEFAULTS: RATE_DEFAULTS, WEIGHT_STEPS: WEIGHT_STEPS,
     hasAge: hasAge, mergeDistributedMaster: mergeDistributedMaster, needsMerge: needsMerge, stdWeight: stdWeight, interleave: interleave, shuffle: shuffle,
     weightForm: weightForm, capFor: capFor, capWeight: capWeight, capRelevant: capRelevant, classifyW: classifyW, ageBandsFor: ageBandsFor, formAgeOk: formAgeOk,
     FSRS_PARAMS: W, SAMPLE_MASTER: SAMPLE_MASTER

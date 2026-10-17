@@ -286,16 +286,16 @@
     }
     const wb = $('weakBox');
     wb.replaceChildren();
-    const weak = pool.filter(function (it) { return store.cards[it.key]; })
-      .map(function (it) { return { it: it, c: store.cards[it.key], r: C.retrievability(store.cards[it.key], now) }; })
-      .filter(function (x) { return x.c.lapses > 0 || x.r < 0.9; })
-      .sort(function (a, b) { return a.r - b.r; }).slice(0, 5);
+    // 苦手：間違えたことのある問題を正答率の低い順（同じなら前回不正解・回答数の多い順）
+    const weak = pool.filter(function (it) { const c = store.cards[it.key]; return c && c.lapses > 0; })
+      .map(function (it) { const c = store.cards[it.key]; return { it: it, c: c, a: C.accuracy(c), last: c.lc === 0 || (c.lc === undefined && c.lapses >= c.reps) }; })
+      .sort(function (a, b) { return a.a - b.a || (b.last - a.last) || (b.c.reps - a.c.reps); }).slice(0, 5);
     if (weak.length) {
       const w = el('div', 'weak');
       weak.forEach(function (x) {
         const row = el('div');
         row.appendChild(el('span', 'wn', itemName(x.it.key)));
-        row.appendChild(el('span', 'wr', Math.round(x.r * 100) + '%'));
+        row.appendChild(el('span', 'wr', '正答 ' + Math.round(x.a * 100) + '%（' + (x.c.reps - x.c.lapses) + '/' + x.c.reps + '）'));
         w.appendChild(row);
       });
       wb.appendChild(w);
@@ -413,7 +413,7 @@
       box.appendChild(gr);
       gr.appendChild(gseg);
       segment(gseg, GOALS.map(function (v) { return { v: v, l: pct(v) }; }), s.goal, function (v) { s.goal = v; save(); renderHome(); });
-      box.appendChild(el('div', 'hint', '定着率＝そのグループの問題を覚えている確率（間隔反復の想起率）の平均です。まだ出していない問題は0%として数えます。今の出題パターン・出題範囲で計算します。'));
+      box.appendChild(el('div', 'hint', '定着率＝そのグループの問題のうち「前回正解し、いま覚えている確率（間隔反復の想起率）が90%以上」の問題の割合です。まだ出していない問題・前回間違えた問題は定着していないと数えます。今の出題パターン・出題範囲で計算します。'));
       if (!act.length && store.groups.length) box.appendChild(el('div', 'hint warn', '出題するグループにチェックを入れてください。'));
     }
     const exn = s.exclude.filter(function (x) { return master.byId[x]; }).length;
@@ -740,6 +740,7 @@
     const kind = (p.pattern === 'recall' || p.kind === 'capRecall') ? 'recall' : (sess.choices ? 'tap' : 'key');
     const g = C.rate(correct, ms, false, kind);
     store.cards[p.key] = C.review(store.cards[p.key], g, Date.now());
+    store.cards[p.key].lc = correct ? 1 : 0;   // 前回の正誤（定着率に使う）
     save();
 
     const rec = { p: p, shown: shown, correct: correct, ms: ms };
