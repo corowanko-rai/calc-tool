@@ -38,9 +38,11 @@ self.addEventListener('fetch', function(e){
   if(OWN.indexOf(url.pathname) < 0) return;   // 各アプリのフォルダには触らない
 
   e.respondWith(
-    fetch(e.request).then(function(res){
-      const copy = res.clone();
-      caches.open(CACHE).then(function(c){ c.put(e.request, copy); });
+    fetch(e.request.mode === 'navigate' ? e.request : new Request(e.request, {cache:'no-cache'})).then(function(res){
+      if(res.ok){   // エラー（404など）はキャッシュしない
+        const copy = res.clone();
+        caches.open(CACHE).then(function(c){ c.put(e.request, copy); });
+      }
       return res;
     }).catch(function(){
       return caches.match(e.request).then(function(m){

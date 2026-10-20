@@ -2011,7 +2011,7 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
      ・端末で追加した成分（ファイルにない id）も残す
      ・採用品は端末の設定を優先。薬効グループは端末で編集していなければファイルに合わせる */
   // マスタの項目の版。古い版のアプリが新しい項目（上限・対象年齢など）を落として取り込んだ端末でも、同じ rev のまま取り込み直せるようにする
-  var MASTER_SCHEMA = 4;
+  var MASTER_SCHEMA = 5;
   function mergeDistributedMaster(local, file){
     var rev = Number(file && file.rev) || 0;
     var fdrugs = (file && Array.isArray(file.drugs)) ? file.drugs.filter(function(d){ return d && typeof d === 'object' && d.id != null && Array.isArray(d.forms); }) : [];
@@ -2026,11 +2026,24 @@ ${formatNum(roundedPerDoseFixed)}ml × ${totalDoses}回 = <b>${formatNum(finalTo
     var deleted = Array.isArray(local.deletedIds) ? local.deletedIds.map(String) : [];
     var byId = {}, inFile = {};
     local.drugs.forEach(function(d){ if(d && d.id != null) byId[String(d.id)] = d; });
+    // 端末で編集した成分にも、配布マスタで新しく増えた項目（含量の問題用の販売規格 lineup・avoid）は同じ名前の剤形から補う
+    var withNewFields = function(ld, fd){
+      if(!ld || !Array.isArray(ld.forms) || !Array.isArray(fd.forms)) return ld;
+      var c = {}; Object.keys(ld).forEach(function(k){ c[k] = ld[k]; });
+      c.forms = ld.forms.map(function(lf){
+        var ff = fd.forms.filter(function(x){ return x && lf && x.n === lf.n; })[0];
+        if(!ff || !lf || typeof lf !== 'object') return lf;
+        var o = {}; Object.keys(lf).forEach(function(k){ o[k] = lf[k]; });
+        ['lineup', 'avoid'].forEach(function(k){ if(o[k] === undefined && Array.isArray(ff[k])) o[k] = ff[k].slice(); });
+        return o;
+      });
+      return c;
+    };
     var drugs = [];
     fdrugs.forEach(function(fd){
       var id = String(fd.id); inFile[id] = 1;
       if(deleted.indexOf(id) >= 0) return;
-      drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? byId[id] : fd);
+      drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? withNewFields(byId[id], fd) : fd);
     });
     // 端末だけにある成分のうち、配布マスタに同じ名前の成分があるものは配布の方に一本化する（同じ薬が2つ並ばないように）
     var nm = function(x){ return String(x || '').normalize('NFKC').replace(/\s+/g, ''); };

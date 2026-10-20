@@ -22,7 +22,7 @@ const APP_SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
+      .then(cache => cache.addAll(APP_SHELL.map(u => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
@@ -41,7 +41,8 @@ self.addEventListener('activate', (event) => {
 
 // ネットワーク優先（取れたらキャッシュも更新／失敗したらキャッシュを返す）
 function networkFirst(req) {
-  return fetch(req)
+  // 画面以外（app.js・defaults.json）はサーバーに更新を確認してから使う（HTTPキャッシュの古い版を使わない）
+  return fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' }))
     .then(res => {
       if (res && res.status === 200) {
         const copy = res.clone();

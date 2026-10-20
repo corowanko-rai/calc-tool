@@ -21,6 +21,7 @@
   --c-recall:#5e6b1f;--s-recall:#eef0dc;
   --c-age2rx:#7a3e6b;--s-age2rx:#f3e6ef;
   --c-cap:#7a2f2f;   --s-cap:#f5e5e2;
+  --c-strength:#2f5a7a;--s-strength:#e2ecf3;
 }
 *{box-sizing:border-box;}
 [hidden]{display:none !important;}
@@ -103,6 +104,7 @@ footer{font-size:11.5px;color:var(--mute);text-align:center;margin-top:16px;line
 .chip.on.p-recall{background:var(--c-recall);border-color:var(--c-recall);}
 .chip.on.p-age2rx{background:var(--c-age2rx);border-color:var(--c-age2rx);}
 .chip.on.p-cap{background:var(--c-cap);border-color:var(--c-cap);}
+.chip.on.p-strength{background:var(--c-strength);border-color:var(--c-strength);}
 
 .row{display:flex;align-items:center;gap:10px;margin-top:10px;}
 .row .lb{width:72px;flex:none;font-size:12.5px;color:var(--ink-soft);}
@@ -146,6 +148,7 @@ footer{font-size:11.5px;color:var(--mute);text-align:center;margin-top:16px;line
 .pchip.p-recall{color:var(--c-recall);background:var(--s-recall);}
 .pchip.p-age2rx{color:var(--c-age2rx);background:var(--s-age2rx);}
 .pchip.p-cap{color:var(--c-cap);background:var(--s-cap);}
+.pchip.p-strength{color:var(--c-strength);background:var(--s-strength);}
 .qsub{font-size:12px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .qtitle{font-size:19px;font-weight:700;margin-top:6px;line-height:1.35;word-break:break-all;}
 .facts{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:baseline;}
@@ -190,6 +193,21 @@ footer{font-size:11.5px;color:var(--mute);text-align:center;margin-top:16px;line
 .choices button:active{background:var(--accent-soft);}
 .choices.three button{font-family:inherit;font-size:19px;min-height:88px;}
 .choices button .kb{font-size:10px;color:var(--mute);font-weight:500;}
+/* 複数選択（含量）：選んだ選択肢と決定ボタン */
+.choices button.sel{background:var(--accent-soft);border:2px solid var(--accent);color:var(--accent-deep);}
+.choices button.sel::before{content:"✓";font-size:13px;font-family:inherit;color:var(--accent);}
+.choices button.cok{grid-column:1/-1;min-height:58px;background:var(--accent);color:#fff;border-color:var(--accent);font-family:inherit;font-size:18px;}
+.choices button.cok:active{background:var(--accent-deep);}
+.choices.shake{animation:shake .25s;}
+/* 複数入力（含量）：入力済みの規格と追加ボタン */
+.multi{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:44px;}
+.mlist{flex:1;display:flex;flex-wrap:wrap;gap:6px;min-width:0;}
+.mlist button{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-deep);border-radius:999px;
+  padding:5px 10px;font-size:15px;font-weight:700;font-family:var(--mono);cursor:pointer;}
+.mlist .mph{font-size:12px;color:var(--ink-soft);}
+.madd{flex:0 0 auto;border:1px solid var(--accent);background:var(--panel);color:var(--accent-deep);border-radius:var(--radius);
+  min-height:44px;padding:0 14px;font-size:15px;font-weight:700;cursor:pointer;}
+.madd:active{background:var(--accent-soft);}
 
 .feedback{
   margin-top:auto;background:var(--panel);border-radius:var(--radius);padding:14px 13px 16px;

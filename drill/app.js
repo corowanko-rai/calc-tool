@@ -36,7 +36,12 @@
     const st = s.settings && typeof s.settings === 'object' ? s.settings : {};
     let pats = Array.isArray(st.patterns) ? st.patterns.filter(function (p) { return PAT[p]; }) : [];
     const known = Array.isArray(st.known) ? st.known : OLD_PATTERNS;
-    if (pats.length) DEFAULT_PATTERNS.forEach(function (p) { if (known.indexOf(p) < 0 && pats.indexOf(p) < 0) pats.push(p); });
+    // 「含量」は v1.9 で「用量・含量」から分けたもの。前の版で「用量・含量」をオンにしていた人だけオンにする
+    if (pats.length) DEFAULT_PATTERNS.forEach(function (p) {
+      if (known.indexOf(p) >= 0 || pats.indexOf(p) >= 0) return;
+      if (p === 'strength' && pats.indexOf('recall') < 0) return;
+      pats.push(p);
+    });
     const groups = Array.isArray(s.groups) ? s.groups.filter(function (g) { return g && typeof g === 'object'; }).slice(0, 50).map(function (g) {
       return { id: txt(g.id, 40) || newId(), name: txt(g.name, 30) || 'グループ', ids: ids(g.ids) };
     }) : [];
@@ -229,9 +234,9 @@
     const parts = key.split('|');
     const d = master && master.byId[parts[1]];
     let name = parts[2] || (d ? d.name : parts[1]);
-    const KIND = { recallAge: '年齢別用量', auditAge: '監査（年齢）', capRecall: '上限量', capWeight: '上限の体重' };
+    const KIND = { recallAge: '年齢別用量', auditAge: '監査（年齢）', capRecall: '上限量', capWeight: '上限の体重', strPick: '含量・選ぶ', strKey: '含量・入力' };
     let pat = KIND[parts[0]] || (PAT[parts[0]] ? PAT[parts[0]].short : parts[0]);
-    if (parts[0] === 'recall') pat = parts[2] ? '含量' : '用量';
+    if (parts[0] === 'recall') pat = parts[2] ? '含量' : '小児用量';
     return pat + '　' + name;
   }
 
@@ -266,7 +271,8 @@
     segment($('scopeSeg'), [{ v: 'adopted', l: '採用品' }, { v: 'all', l: '全製剤' }], s.scope, function (v) { s.scope = v; save(); renderHome(); });
 
     const notes = [];
-    if (s.patterns.indexOf('recall') >= 0) notes.push('「用量・含量」は製剤名を見て小児用量（mg/kg・年齢別の量）や含量を答える暗記問題です。');
+    if (s.patterns.indexOf('recall') >= 0) notes.push('「小児用量」は薬を見て小児用量（mg/kg・年齢別の量）を答える暗記問題です。');
+    if (s.patterns.indexOf('strength') >= 0) notes.push('「含量」は製剤名の％・mgを伏せて、販売されている規格をすべて答える問題です（選ぶ問題は当てはまるものをすべて選んで決定、入力する問題は規格を1つ入れるごとに「追加」。回答方式の設定にかかわらずこの形で出ます）。');
     if (s.patterns.indexOf('audit') >= 0) notes.push('監査判定には年齢区分の薬（年齢を見て判断）も含まれます。');
     if (s.patterns.indexOf('audit') >= 0) notes.push('監査判定は回答方式にかかわらず3択です。体重の大きい子で上限（成人量など）を超える処方もまぎれています（少しでも超えたら「多い」）。');
     if (s.patterns.indexOf('cap') >= 0) notes.push('「成人量の上限」は上限量と、体重あたりで計算した量が上限に届く体重を覚える問題です。');
@@ -642,8 +648,11 @@
     if (!p) { list.splice(sess.i, 1); if (sess.phase === 'main') sess.n = list.length; nextQuestion(); return; }
     sess.p = p;
     sess.input = '';
+    sess.multiVals = [];          // 複数入力（含量・入力）：追加した規格
+    sess.multiSel = new Set();    // 複数選択（含量・選ぶ）：選んだ選択肢の番号
     sess.locked = false;
-    sess.choices = (store.settings.mode === 'choice' || p.answer.type === 'choice') ? C.makeChoices(p, Math.random) : null;
+    sess.choices = p.forceKey ? null
+      : (store.settings.mode === 'choice' || p.answer.type === 'choice' || p.fixedChoices) ? C.makeChoices(p, Math.random) : null;
     renderQuestion();
     sess.qStart = performance.now();
   }
@@ -665,7 +674,7 @@
     $('pFill').style.width = (sess.i / list.length * 100) + '%';
     const pc = $('qPat');
     pc.className = 'pchip p-' + p.pattern;
-    pc.textContent = p.chip || (p.pattern === 'recall' ? (p.formN ? '含量' : '用量') : PAT[p.pattern].label);
+    pc.textContent = p.chip || PAT[p.pattern].label;
     $('qSub').textContent = p.sub;
     $('qTitle').textContent = p.title;
     const facts = $('qFacts');
@@ -683,7 +692,8 @@
     $('disp').hidden = !keyMode;
     $('keypad').hidden = !keyMode;
     $('choices').hidden = keyMode;
-    if (keyMode) { $('dispUnit').textContent = p.unit; renderInput(); buildKeypad(); }
+    $('multiBar').hidden = !(keyMode && p.multi);
+    if (keyMode) { $('dispUnit').textContent = p.unit; renderInput(); buildKeypad(); renderMulti(); }
     else buildChoices();
   }
 
@@ -718,6 +728,7 @@
   function press(k) {
     if (!sess || sess.locked) return;
     if (k === 'ok') { submit(); return; }
+    if (k === 'add') { addMulti(); return; }
     if (k === 'bs') sess.input = sess.input.slice(0, -1);
     else if (k === 'c') sess.input = '';
     else if (k === '.') { if (sess.input.indexOf('.') < 0 && sess.input.length < 7) sess.input = (sess.input || '0') + '.'; }
@@ -729,6 +740,32 @@
     v.textContent = sess.input || '0';
     v.classList.toggle('ph', !sess.input);
   }
+
+  // 複数入力：いまの数字を「追加」して、次の規格を入力する
+  function addMulti() {
+    if (!sess || sess.locked || !sess.p.multi) return false;
+    const x = C.parseInput(sess.input);
+    if (!(x > 0)) { shake($('disp')); return false; }
+    if (!sess.multiVals.some(function (v) { return v === x; })) sess.multiVals.push(x);
+    sess.input = '';
+    renderInput(); renderMulti();
+    return true;
+  }
+  function renderMulti() {
+    const host = $('multiList');
+    host.replaceChildren();
+    if (!sess.p.multi) return;
+    if (!sess.multiVals.length) { host.appendChild(el('span', 'mph', '規格が2つ以上あるときは、1つ入れるごとに「追加」')); return; }
+    sess.multiVals.forEach(function (v, i) {
+      const b = el('button', '', fmtNum(v) + sess.p.unit + ' ×');
+      b.type = 'button';
+      b.setAttribute('aria-label', fmtNum(v) + sess.p.unit + 'を取り消す');
+      b.addEventListener('pointerdown', function (e) { e.preventDefault(); if (sess.locked) return; sess.multiVals.splice(i, 1); renderMulti(); });
+      host.appendChild(b);
+    });
+  }
+  function fmtNum(v) { return String(Math.round(v * 1e6) / 1e6); }
+  function shake(node) { node.classList.remove('shake'); void node.offsetWidth; node.classList.add('shake'); }
 
   /* --- 選択肢 --- */
   function buildChoices() {
@@ -742,9 +779,25 @@
       b.appendChild(document.createTextNode(c.label));
       if (p.answer.type !== 'choice') b.appendChild(el('small', '', p.unit));
       b.appendChild(el('span', 'kb', String(i + 1)));
-      b.addEventListener('pointerdown', function (e) { e.preventDefault(); submit(c.value, c.label); });
+      if (p.multi) {
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('pointerdown', function (e) { e.preventDefault(); toggleChoice(i); });
+      } else b.addEventListener('pointerdown', function (e) { e.preventDefault(); submit(c.value, c.label); });
       host.appendChild(b);
     });
+    if (p.multi) {   // 複数選択：選んでから「決定」
+      const ok = el('button', 'cok', '決定');
+      ok.type = 'button';
+      ok.addEventListener('pointerdown', function (e) { e.preventDefault(); submit(); });
+      host.appendChild(ok);
+    }
+  }
+  function toggleChoice(i) {
+    if (!sess || sess.locked || !sess.choices || i < 0 || i >= sess.choices.length) return;
+    if (sess.multiSel.has(i)) sess.multiSel.delete(i); else sess.multiSel.add(i);
+    const b = $('choices').children[i];
+    b.classList.toggle('sel', sess.multiSel.has(i));
+    b.setAttribute('aria-pressed', sess.multiSel.has(i) ? 'true' : 'false');
   }
 
   /* --- 回答 --- */
@@ -752,7 +805,19 @@
     if (!sess || sess.locked) return;
     const p = sess.p;
     let value, shown;
-    if (sess.choices) { value = choiceValue; shown = choiceLabel + (p.answer.type === 'choice' ? '' : ' ' + p.unit); }
+    if (p.multi && sess.choices) {   // 複数選択
+      const idx = Array.from(sess.multiSel).sort(function (a, b) { return a - b; });
+      if (!idx.length) { shake($('choices')); return; }
+      value = idx.map(function (i) { return sess.choices[i].value; });
+      shown = idx.map(function (i) { return sess.choices[i].label + p.unit; }).join('・');
+    } else if (p.multi) {            // 複数入力：入力中の数字も含める
+      const vals = sess.multiVals.slice();
+      const x = C.parseInput(sess.input);
+      if (sess.input && !(x > 0)) { shake($('disp')); return; }
+      if (x > 0 && vals.indexOf(x) < 0) vals.push(x);
+      if (!vals.length) { shake($('disp')); return; }
+      value = vals; shown = vals.map(function (v) { return fmtNum(v) + p.unit; }).join('・');
+    } else if (sess.choices) { value = choiceValue; shown = choiceLabel + (p.answer.type === 'choice' ? '' : ' ' + p.unit); }
     else {
       const x = C.parseInput(sess.input);
       if (!isFinite(x)) { const d = $('disp'); d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); return; }
@@ -761,7 +826,8 @@
     sess.locked = true;
     const ms = Math.max(0, performance.now() - sess.qStart);
     const correct = C.judge(p, value);
-    const kind = (p.pattern === 'recall' || p.kind === 'capRecall') ? 'recall' : (sess.choices ? 'tap' : 'key');
+    // 時間の目安：暗記は短め。複数答える含量は入力・選択に時間がかかるのでテンキーと同じ
+    const kind = p.multi ? 'key' : ((p.pattern === 'recall' || p.kind === 'capRecall') ? 'recall' : (sess.choices ? 'tap' : 'key'));
     const g = C.rate(correct, ms, false, kind);
     store.cards[p.key] = C.review(store.cards[p.key], g, Date.now());
     store.cards[p.key].lc = correct ? 1 : 0;   // 前回の正誤（定着率に使う）
@@ -872,7 +938,7 @@
     const box = el('div', 'rv ' + (r.correct ? 'ok' : 'ng'));
     const h = el('div', 'rv-h');
     h.appendChild(el('span', 'mk', r.correct ? '◯' : '✕'));
-    h.appendChild(el('span', 'pchip p-' + p.pattern, p.chip || (p.pattern === 'recall' ? (p.formN ? '含量' : '用量') : PAT[p.pattern].short)));
+    h.appendChild(el('span', 'pchip p-' + p.pattern, p.chip || PAT[p.pattern].short));
     h.appendChild(el('span', 'nm', p.title));
     h.appendChild(el('span', 'tm', fmtSec(r.ms) + 's'));
     box.appendChild(h);
@@ -911,9 +977,15 @@
     }
     if (sess.choices) {
       const i = Number(e.key) - 1;
+      if (sess.p.multi) {
+        if (i >= 0 && i < sess.choices.length) { e.preventDefault(); toggleChoice(i); }
+        else if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        return;
+      }
       if (i >= 0 && i < sess.choices.length) { e.preventDefault(); submit(sess.choices[i].value, sess.choices[i].label); }
       return;
     }
+    if (sess.p.multi && (e.key === ',' || e.key === '+' || e.key === ' ')) { e.preventDefault(); press('add'); return; }
     if (/^[0-9]$/.test(e.key) || e.key === '.') { e.preventDefault(); press(e.key); }
     else if (e.key === 'Backspace') { e.preventDefault(); press('bs'); }
     else if (e.key === 'Delete') { e.preventDefault(); press('c'); }
@@ -924,6 +996,7 @@
   $('startBtn').addEventListener('click', start);
   $('quitBtn').addEventListener('click', quit);
   $('fb').addEventListener('click', advance);
+  $('multiAdd').addEventListener('pointerdown', function (e) { e.preventDefault(); press('add'); });
   $('againBtn').addEventListener('click', start);
   $('homeBtn').addEventListener('click', function () { show('home'); renderHome(); });
   $('reloadBtn').addEventListener('click', function () { initMaster(true); });

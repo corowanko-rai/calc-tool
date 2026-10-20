@@ -2,14 +2,17 @@
    - drill フォルダ内のファイルだけをキャッシュする（他アプリのキャッシュには触れない）
    - 共通マスタ drug-master.json はネット優先、つながらないときだけキャッシュを使う */
 'use strict';
-const VERSION = 'drill-v1.8.2';
+const VERSION = 'drill-v1.9.1';
 const SHELL = [
   './', './index.html', './style.css', './core.js', './app.js', './manifest.json',
   './icon-192.png', './icon-512.png', './icon-192-maskable.png', './icon-512-maskable.png', './apple-touch-icon.png'
 ];
 
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
+  // ブラウザのHTTPキャッシュに残った古いファイルを取り込まないよう、サーバーから取り直す（cache: 'reload'）
+  e.waitUntil(caches.open(VERSION).then(function (c) {
+    return c.addAll(SHELL.map(function (u) { return new Request(u, { cache: 'reload' }); }));
+  }).then(function () { return self.skipWaiting(); }));
 });
 
 self.addEventListener('activate', function (e) {
@@ -58,7 +61,7 @@ self.addEventListener('fetch', function (e) {
   // それ以外（CSS・JS・アイコン）：キャッシュ優先、裏で更新
   e.respondWith(
     caches.match(req).then(function (hit) {
-      const net = fetch(req).then(function (res) {
+      const net = fetch(new Request(req, { cache: 'no-cache' })).then(function (res) {   // 裏の更新はサーバーに確認してから
         if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); }); }
         return res;
       }).catch(function () { return hit; });

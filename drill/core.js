@@ -36,7 +36,8 @@
   const WEIGHT_STEPS = [{ v: 0.5, l: '少なめ' }, { v: 1, l: '普通' }, { v: 2, l: '多め' }];
 
   const PATTERNS = [
-    { id: 'recall', label: '用量・含量',     short: '用量・含量' },
+    { id: 'recall', label: '小児用量',      short: '小児用量' },
+    { id: 'strength', label: '含量（規格）', short: '含量' },
     { id: 'w2rx',   label: '体重→処方量',   short: '体重→成分量' },
     { id: 'w2prod', label: '体重→製剤量',   short: '体重→製剤量' },
     { id: 'rx2w',   label: '処方量→体重',   short: '処方量→体重' },
@@ -134,7 +135,8 @@
           const am = num(f.ageMin), ax = num(f.ageMax);
           const ageMin = am >= 0 && am < 100 ? am : null;
           const ageMax = ax > 0 && ax <= 100 && (ageMin === null || ax > ageMin) ? ax : null;
-          forms.push({ n: n, t: t, s: s, sr: f.sr === true, ageMin: ageMin, ageMax: ageMax });
+          // 含量の問題：販売されている規格（製剤名の数字。lineup）と、誤答肢に使わない数字（avoid：調剤用・小児用など名前の近い製剤）
+          forms.push({ n: n, t: t, s: s, sr: f.sr === true, ageMin: ageMin, ageMax: ageMax, lineup: numList(f.lineup), avoid: numList(f.avoid) });
         }
       }
       if (!forms.length) continue;
@@ -189,6 +191,11 @@
       });
     }
     return { drugs: drugs, byId: byId, adopted: adopted, groups: groups, updatedAt: str(raw.updatedAt, 40) };
+  }
+  function numList(a) {
+    const out = [];
+    if (Array.isArray(a)) a.slice(0, 20).forEach(function (x) { const v = num(x); if (v > 0 && v < 100000 && out.indexOf(v) < 0) out.push(v); });
+    return out.sort(function (x, y) { return x - y; });
   }
   function strList(a) {
     return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }).slice(0, 200).map(function (x) { return str(x, 160); }) : [];
@@ -251,6 +258,7 @@
     (patterns || []).forEach(function (p) { want[p] = 1; });
     const ad = scope === 'adopted' && m.adopted.length ? new Set(m.adopted) : null;
     const pool = [];
+    const strSeen = Object.create(null);   // 含量：数字を伏せた名前ごとに1問
     for (const d of m.drugs) {
       if (drugSet && !drugSet.has(d.id)) continue;
       const forms = d.forms.filter(function (f) { return !ad || ad.has(f.n); });
@@ -269,8 +277,16 @@
           pool.push(item('cap', d.id, '', 'capWeight'));
         }
       }
-      // 含量の暗記（散剤・水剤。成人用の製剤も含む）
-      if (want.recall) forms.forEach(function (f) { if (WEIGHT_FORMS[f.t]) pool.push(item('recall', d.id, f.n)); });
+      // 含量（規格）：製剤名の数字を伏せて、販売されている規格を答える（散剤・DS・シロップ・液。成人用の製剤も含む）
+      //  strPick＝選ぶ（販売の規格を確認済みの製剤だけ）、strKey＝テンキーで入力。記録は別
+      //  規格違いの同じ名前の製剤（カロナール細粒20%・50%）は答えが同じなので1問にまとめる
+      if (want.strength) forms.forEach(function (f) {
+        const tk = WEIGHT_FORMS[f.t] ? strengthTok(f.n) : null;
+        if (!tk || strSeen[tk.masked]) return;
+        strSeen[tk.masked] = 1;
+        if (f.lineup.length) pool.push(item('strength', d.id, f.n, 'strPick'));
+        pool.push(item('strength', d.id, f.n, 'strKey'));
+      });
       if (hasAge(d) && forms.some(function (f) { return ageForm(d, f); })) {   // 年齢区分の薬
         if (want.recall) pool.push(item('recall', d.id, '', 'recallAge'));
         if (want.audit) pool.push(item('audit', d.id, '', 'auditAge'));
@@ -392,7 +408,9 @@
       case 'recallAge': return hasAge(d) ? genRecallAge(it, d, m, rng, scope) : null;
       case 'auditAge':  return hasAge(d) ? genAuditAge(it, d, m, rng, scope) : null;
       case 'age2rx':    return hasAge(d) && f ? genAge2rx(it, d, f, rng) : null;
-      case 'recall': return genRecall(it, d, f, m, rng, scope);
+      case 'recall': return f ? null : genRecall(it, d, null, m, rng, scope);
+      case 'strPick': return f ? genStrength(it, d, f, m, rng, true) : null;
+      case 'strKey':  return f ? genStrength(it, d, f, m, rng, false) : null;
       case 'w2rx':   return hasDose(d) ? genW2rx(it, d, rng) : null;
       case 'w2prod': return hasDose(d) && f ? genW2prod(it, d, f, rng) : null;
       case 'rx2w':   return hasDose(d) && f ? genRx2w(it, d, f, rng) : null;
@@ -493,6 +511,93 @@
     p.answer = { type: 'point', value: f.s, tol: tolFor(f.s, 'mg') };
     p.distractors = [f.s * 10, f.s / 10, f.s * 2, f.s / 2, f.s * 5, f.s / 5];
     p.explain = [f.n + '：' + strengthText(f)];
+    return p;
+  }
+
+  /* ---------------- 含量（規格） ---------------- */
+  // 製剤名の中の規格（例：ムコダインDS50% → 50 / %）。括弧の中の補足（例：0.1%（1mg/mL））は伏せた名前から外す
+  const STR_RE = /(\d+(?:\.\d+)?)\s*(%|％|mg[\/／]g|mg[\/／]mL|μg[\/／]mL|mg|μg)/;
+  function strengthTok(n) {
+    const n2 = String(n).replace(/（[^）]*\d[^）]*）/g, '');
+    const mm = STR_RE.exec(n2);
+    if (!mm) return null;
+    const u = mm[2] === '％' ? '%' : mm[2].replace('／', '/');
+    return { val: Number(mm[1]), unit: u, masked: n2.slice(0, mm.index) + '◯' + u + n2.slice(mm.index + mm[0].length),
+             name: function (v) { return n2.slice(0, mm.index) + n2s(v) + u + n2.slice(mm.index + mm[0].length); } };
+  }
+  function sameNum(a, b) { return Math.abs(a - b) <= Math.max(1e-9, Math.abs(b) * 1e-6); }
+  // 同じ名前（数字を伏せた名前）の製剤の規格。マスタに確認済みの一覧（lineup）があればそれを使う
+  function familyVals(m, f, t) {
+    const vals = f.lineup.length ? f.lineup.slice() : [];
+    if (!vals.length) m.drugs.forEach(function (d) { d.forms.forEach(function (g) {
+      const u = strengthTok(g.n);
+      if (u && u.masked === t.masked && !vals.some(function (v) { return sameNum(v, u.val); })) vals.push(u.val);
+    }); });
+    if (!vals.some(function (v) { return sameNum(v, t.val); })) vals.push(t.val);
+    return vals.sort(function (a, b) { return a - b; });
+  }
+  // 誤答肢の候補（よく使われる規格の数字）
+  const STR_LADDER = {
+    '%': [0.005, 0.01, 0.02, 0.025, 0.03, 0.04, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 0.8, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10, 12.5, 15, 20, 25, 30, 33.3, 40, 50, 60, 70, 80, 90, 98.5],
+    'mg': [1, 2, 2.5, 4, 5, 10, 20, 25, 30, 40, 50, 60, 75, 100, 120, 150, 200, 250, 300, 500, 1000, 2000, 2500, 5000],
+    'other': [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.3, 0.5, 1, 2, 2.5, 3, 4, 5, 10, 20, 25, 50, 100, 200, 500]
+  };
+  function strDistractors(d, f, t, real, avoid, rng, want) {
+    want = want || 3;
+    const bad = function (v) { return !(v > 0) || (t.unit === '%' && v >= 100) || real.concat(avoid).some(function (x) { return sameNum(x, v); }); };
+    const out = [];
+    const add = function (v) { v = Number(n2s(v)); if (out.length < want && !bad(v) && !out.some(function (x) { return sameNum(x, v); })) out.push(v); };
+    // ① 同じ薬の別の剤形の規格（例：アスベリンDSに散の10%）— 取り違えやすい
+    shuffle(d.forms.filter(function (g) { return g !== f && WEIGHT_FORMS[g.t]; }), rng).forEach(function (g) {
+      const u = strengthTok(g.n); if (u && u.unit === t.unit && out.length < 1) add(u.val);
+    });
+    // ② 近い数字（よく使われる規格の並びで前後）と桁ずれ
+    const lad = STR_LADDER[t.unit] || (t.unit === 'mg' ? STR_LADDER.mg : STR_LADDER.other);
+    const near = lad.filter(function (v) { return !bad(v); }).sort(function (a, b) {
+      return Math.abs(Math.log(a / t.val)) - Math.abs(Math.log(b / t.val)); }).slice(0, 4);
+    const cands = shuffle(near.slice(), rng).concat([t.val * 10, t.val / 10, t.val * 2, t.val / 2]);
+    cands.forEach(add);
+    let k = 3; while (out.length < want && k < 50) { add(t.val * k); add(t.val / k); k++; }
+    return out;
+  }
+  // 含量（規格）：販売されている規格をすべて答える
+  //  選ぶ：4つの選択肢から、販売されている規格をすべて選ぶ（選択肢に入っている実在の規格は1つのことも全部のこともある）
+  //  入力：販売されている規格をすべて入力する（1規格ならその1つ）
+  function genStrength(it, d, f, m, rng, pickMode) {
+    const t = strengthTok(f.n);
+    if (!t) return null;
+    if (pickMode && !f.lineup.length) return null;
+    const real = familyVals(m, f, t);
+    const p = base(it, d, f);
+    p.title = t.masked;
+    p.sub = d.name + '・' + FORM_LABEL[f.t];
+    p.chip = pickMode ? '含量・選ぶ' : '含量・入力';
+    p.unit = t.unit; p.fu = '';
+    p.multi = true;
+    p.explain = ['販売されている規格：' + real.map(function (v) { return t.name(v); }).join('、')];
+    const stem = t.masked.replace('◯' + t.unit, '');
+    if (pickMode) {
+      // 選択肢に入れる実在の規格：1つ〜すべて（4択なので最大3つ）。複数あるときは半分は全部入れる
+      let shown = shuffle(real.slice(), rng);
+      const maxReal = Math.min(3, shown.length);
+      const nReal = maxReal <= 1 ? 1 : (rng() < 0.5 ? maxReal : 1 + Math.floor(rng() * maxReal));
+      shown = shown.slice(0, nReal);
+      const ds = strDistractors(d, f, Object.assign({}, t, { val: shown[0] }), real, f.avoid, rng, 4 - nReal);
+      if (ds.length < 4 - nReal) return null;
+      p.fixedChoices = shuffle(shown.map(function (v) { return { label: n2s(v), value: v, correct: true }; })
+        .concat(ds.map(function (v) { return { label: n2s(v), value: v, correct: false }; })), rng);
+      p.ask = '販売されている規格をすべて選んでください';
+      p.answer = { type: 'multi', values: shown.slice().sort(function (a, b) { return a - b; }) };
+      p.explain.push(ds.map(function (v) { return n2s(v) + t.unit; }).join('・') + ' の' + stem + 'はありません');
+      if (shown.length < real.length) p.explain.push('選択肢になかった規格：' + real.filter(function (v) {
+        return !shown.some(function (x) { return sameNum(x, v); }); }).map(function (v) { return n2s(v) + t.unit; }).join('・'));
+    } else {
+      p.forceKey = true;
+      p.ask = '販売されている規格をすべて入力してください';
+      p.answer = { type: 'multi', values: real.slice() };
+    }
+    p.memo = [f.n + '　' + strengthText(f)];
+    p.note = '';
     return p;
   }
 
@@ -992,6 +1097,14 @@
   function judge(p, input) {
     const a = p.answer;
     if (a.type === 'choice') return input === a.value;
+    if (a.type === 'multi') {   // すべてそろって、余分がないときだけ正解
+      const xs = [];
+      (Array.isArray(input) ? input : [input]).forEach(function (v) {
+        v = typeof v === 'number' ? v : parseInput(String(v));
+        if (isFinite(v) && !xs.some(function (y) { return sameNum(y, v); })) xs.push(v);
+      });
+      return xs.length === a.values.length && a.values.every(function (y) { return xs.some(function (x) { return sameNum(y, x); }); });
+    }
     const x = typeof input === 'number' ? input : parseInput(String(input));
     if (!isFinite(x)) return false;
     if (a.type === 'point') return Math.abs(x - a.value) <= a.tol;
@@ -1001,12 +1114,14 @@
     const a = p.answer;
     if (a.type === 'choice') return AUDIT_CHOICES.filter(function (c) { return c.value === a.value; })[0].label;
     if (a.type === 'point') return fmt(a.value, p.fu) + ' ' + p.unit;
+    if (a.type === 'multi') return a.values.map(function (v) { return n2s(v) + p.unit; }).join('・');
     return fmt(a.lo, p.fu) + '〜' + fmt(a.hi, p.fu) + ' ' + p.unit;
   }
 
   // 4択：よくある間違い（桁ずれ・上下限の取り違え・1回量と1日量の混同）を優先して誤答肢にする
   function makeChoices(p, rng) {
     if (p.answer.type === 'choice') return AUDIT_CHOICES.map(function (c) { return { label: c.label, value: c.value }; });
+    if (p.fixedChoices) return p.fixedChoices.map(function (c) { return { label: c.label, value: c.value, correct: c.correct }; });
     const correct = p.answer.type === 'point' ? p.answer.value : p.answer.rep;
     const out = [{ label: fmt(correct, p.fu), value: Number(fmt(correct, p.fu)), correct: true }];
     const used = new Set([out[0].label]);
@@ -1138,6 +1253,11 @@
     pats.forEach(function (p) {
       const t = parts[p], q = quota[p] || 0, k = Math.max(0, q - t.nw);
       order[p] = t.due.slice(0, k).concat(t.fresh.slice(0, t.nw), t.due.slice(k), t.notDue, t.fresh.slice(t.nw));
+      // 含量：同じ製剤の「選ぶ」と「入力」は1セットに1つだけ（片方の答えがもう片方のヒントにならないように）
+      if (p === 'strength') {
+        const used = Object.create(null);
+        order[p] = order[p].filter(function (it) { const k2 = it.drugId + '|' + it.formN; if (used[k2]) return false; used[k2] = 1; return true; });
+      }
     });
     const out = [], taken = Object.create(null);
     pats.forEach(function (p) { taken[p] = 0; });
@@ -1155,10 +1275,11 @@
       if (!best) break;
       out.push(order[best][taken[best]++]);
     }
-    // それでも足りなければ（対象が少ない）同じアイテムを数値を変えて再出題
+    // それでも足りなければ（対象が少ない）同じアイテムを数値を変えて再出題。
+    // 含量は数値が変わらない（同じ問題になる）ので再出題しない＝そのセットは問題数が少なくなる
     let i = 0;
-    const src = out.length ? out.slice() : pool.slice();
-    while (out.length < n) { out.push(src[i % src.length]); i++; }
+    const src = (out.length ? out : pool).filter(function (it) { return it.pattern !== 'strength'; });
+    while (src.length && out.length < n) { out.push(src[i % src.length]); i++; }
     return interleave(shuffle(out, rng));
   }
   // n 問をパターンの比率で割り振る（端数は大きい順）
@@ -1223,7 +1344,7 @@
      ・端末で追加した成分（ファイルにない id）も残す
      ・採用品は端末の設定を優先。薬効グループは端末で編集していなければファイルに合わせる */
   // マスタの項目の版。古い版のアプリが新しい項目（上限・対象年齢など）を落として取り込んだ端末でも、同じ rev のまま取り込み直せるようにする
-  var MASTER_SCHEMA = 4;
+  var MASTER_SCHEMA = 5;
   // 配布マスタ（rev）を取り込むか：新しい rev、または同じ rev でも項目の版（schema）が古い
   function needsMerge(local, rev) {
     const base = Number(local && local.baseRev) || 0;
@@ -1243,11 +1364,24 @@
     var deleted = Array.isArray(local.deletedIds) ? local.deletedIds.map(String) : [];
     var byId = {}, inFile = {};
     local.drugs.forEach(function(d){ if(d && d.id != null) byId[String(d.id)] = d; });
+    // 端末で編集した成分にも、配布マスタで新しく増えた項目（含量の問題用の販売規格 lineup・avoid）は同じ名前の剤形から補う
+    var withNewFields = function(ld, fd){
+      if(!ld || !Array.isArray(ld.forms) || !Array.isArray(fd.forms)) return ld;
+      var c = {}; Object.keys(ld).forEach(function(k){ c[k] = ld[k]; });
+      c.forms = ld.forms.map(function(lf){
+        var ff = fd.forms.filter(function(x){ return x && lf && x.n === lf.n; })[0];
+        if(!ff || !lf || typeof lf !== 'object') return lf;
+        var o = {}; Object.keys(lf).forEach(function(k){ o[k] = lf[k]; });
+        ['lineup', 'avoid'].forEach(function(k){ if(o[k] === undefined && Array.isArray(ff[k])) o[k] = ff[k].slice(); });
+        return o;
+      });
+      return c;
+    };
     var drugs = [];
     fdrugs.forEach(function(fd){
       var id = String(fd.id); inFile[id] = 1;
       if(deleted.indexOf(id) >= 0) return;
-      drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? byId[id] : fd);
+      drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? withNewFields(byId[id], fd) : fd);
     });
     // 端末だけにある成分のうち、配布マスタに同じ名前の成分があるものは配布の方に一本化する（同じ薬が2つ並ばないように）
     var nm = function(x){ return String(x || '').normalize('NFKC').replace(/\s+/g, ''); };
@@ -1340,7 +1474,7 @@
     retrievability: retrievability, review: review, rate: rate, nextIntervalDays: nextIntervalDays,
     buildSet: buildSet, poolStats: poolStats, accuracy: accuracy, isMastered: isMastered, setRates: setRates, RATE_DEFAULTS: RATE_DEFAULTS, WEIGHT_STEPS: WEIGHT_STEPS,
     hasAge: hasAge, mergeDistributedMaster: mergeDistributedMaster, needsMerge: needsMerge, stdWeight: stdWeight, interleave: interleave, shuffle: shuffle,
-    weightForm: weightForm, capFor: capFor, capWeight: capWeight, capRelevant: capRelevant, classifyW: classifyW, ageBandsFor: ageBandsFor, formAgeOk: formAgeOk,
+    weightForm: weightForm, strengthTok: strengthTok, capFor: capFor, capWeight: capWeight, capRelevant: capRelevant, classifyW: classifyW, ageBandsFor: ageBandsFor, formAgeOk: formAgeOk,
     FSRS_PARAMS: W, SAMPLE_MASTER: SAMPLE_MASTER
   };
 });

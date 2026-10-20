@@ -868,6 +868,7 @@ function openDrugForm(index){
     r.querySelector('[data-k="t"]').value=f.t||'powder';
     r.querySelector('[data-k="s"]').value=(f.s!==undefined?f.s:'');
     r.dataset.sr=f.sr?'1':''; r.dataset.note=f.note||'';
+    r.dataset.avoid=JSON.stringify(numList(f.avoid));
     const u=r.querySelector('.u');
     const upd=function(){
       const t=r.querySelector('[data-k="t"]').value;
@@ -887,7 +888,13 @@ function openDrugForm(index){
       '<span class="mlb">歳未満（空欄＝制限なし）</span>';
     ar.querySelector('[data-k="a0"]').value=(typeof f.ageMin==='number')?f.ageMin:'';
     ar.querySelector('[data-k="a1"]').value=(typeof f.ageMax==='number')?f.ageMax:'';
-    wrap.appendChild(r); wrap.appendChild(ar);
+    // 販売されている規格（ドリルの「含量」の問題で使う。散・DS・シロップ・液のみ）
+    const lr=document.createElement('div'); lr.className='m-age';
+    const ll=document.createElement('span'); ll.className='mlb'; ll.textContent='販売規格（製剤名の数字・カンマ区切り）';
+    const li=document.createElement('input'); li.type='text'; li.className='num'; li.dataset.k='lineup'; li.placeholder='例：20, 50'; li.inputMode='decimal';
+    li.value=numList(f.lineup).join(', '); li.style.width='9em'; li.style.textAlign='left';
+    lr.appendChild(ll); lr.appendChild(li);
+    wrap.appendChild(r); wrap.appendChild(ar); wrap.appendChild(lr);
     fh.appendChild(wrap);
   }
   (src.forms||[]).forEach(addRow);
@@ -904,6 +911,10 @@ function openDrugForm(index){
       if(!n||s===null||s<=0) return;
       const o={n:n,t:r.querySelector('[data-k="t"]').value,s:s};
       if(r.dataset.sr)o.sr=true; if(r.dataset.note)o.note=r.dataset.note;
+      const lu=numList(String(w.querySelector('[data-k="lineup"]').value||'').split(/[,、，\s]+/).filter(Boolean));
+      if(lu.length) o.lineup=lu;
+      let av=[]; try{ av=numList(JSON.parse(r.dataset.avoid||'[]')); }catch(e){}
+      if(av.length) o.avoid=av;
       const a0=num(w.querySelector('[data-k="a0"]').value), a1=num(w.querySelector('[data-k="a1"]').value);
       if((a0!==null&&a0<0)||(a1!==null&&a1<=0)||(a0!==null&&a1!==null&&a1<=a0)) badAge++;
       else{ if(a0!==null&&a0>0)o.ageMin=a0; if(a1!==null)o.ageMax=a1; }
@@ -1100,6 +1111,11 @@ function safeText(v, max){
   return String(v).replace(/[\u0000-\u001f\u007f]/g,' ').replace(/[<>&"']/g,function(c){
     return {'<':'＜','>':'＞','&':'＆','"':'”',"'":'’'}[c]; }).slice(0, max||400);
 }
+function numList(a){
+  const out=[];
+  if(Array.isArray(a)) a.slice(0,20).forEach(function(x){ const v=parseFloat(x); if(isFinite(v)&&v>0&&v<100000&&out.indexOf(v)<0) out.push(v); });
+  return out.sort(function(x,y){return x-y;});
+}
 function validDrugs(arr){
   if(!Array.isArray(arr)) return null;
   const out=[];
@@ -1117,6 +1133,8 @@ function validDrugs(arr){
       const a0=parseFloat(f.ageMin), a1=parseFloat(f.ageMax);
       if(isFinite(a0)&&a0>0&&a0<100) o.ageMin=a0;
       if(isFinite(a1)&&a1>0&&a1<=100&&!(o.ageMin>=a1)) o.ageMax=a1;
+      // 含量の問題用：販売されている規格（製剤名の数字）と、誤答肢に使わない数字
+      ['lineup','avoid'].forEach(function(k){ const l=numList(f[k]); if(l.length) o[k]=l; });
       forms.push(o);
     });
     if(!forms.length) return;
@@ -1353,7 +1371,7 @@ renderRps();
    ・端末で追加した成分（ファイルにない id）も残す
    ・採用品は端末の設定を優先。薬効グループは端末で編集していなければファイルに合わせる */
 // マスタの項目の版。古い版のアプリが新しい項目（上限・対象年齢など）を落として取り込んだ端末でも、同じ rev のまま取り込み直せるようにする
-var MASTER_SCHEMA = 4;
+var MASTER_SCHEMA = 5;
 function mergeDistributedMaster(local, file){
   var rev = Number(file && file.rev) || 0;
   var fdrugs = (file && Array.isArray(file.drugs)) ? file.drugs.filter(function(d){ return d && typeof d === 'object' && d.id != null && Array.isArray(d.forms); }) : [];
@@ -1368,11 +1386,24 @@ function mergeDistributedMaster(local, file){
   var deleted = Array.isArray(local.deletedIds) ? local.deletedIds.map(String) : [];
   var byId = {}, inFile = {};
   local.drugs.forEach(function(d){ if(d && d.id != null) byId[String(d.id)] = d; });
+  // 端末で編集した成分にも、配布マスタで新しく増えた項目（含量の問題用の販売規格 lineup・avoid）は同じ名前の剤形から補う
+  var withNewFields = function(ld, fd){
+    if(!ld || !Array.isArray(ld.forms) || !Array.isArray(fd.forms)) return ld;
+    var c = {}; Object.keys(ld).forEach(function(k){ c[k] = ld[k]; });
+    c.forms = ld.forms.map(function(lf){
+      var ff = fd.forms.filter(function(x){ return x && lf && x.n === lf.n; })[0];
+      if(!ff || !lf || typeof lf !== 'object') return lf;
+      var o = {}; Object.keys(lf).forEach(function(k){ o[k] = lf[k]; });
+      ['lineup', 'avoid'].forEach(function(k){ if(o[k] === undefined && Array.isArray(ff[k])) o[k] = ff[k].slice(); });
+      return o;
+    });
+    return c;
+  };
   var drugs = [];
   fdrugs.forEach(function(fd){
     var id = String(fd.id); inFile[id] = 1;
     if(deleted.indexOf(id) >= 0) return;
-    drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? byId[id] : fd);
+    drugs.push((edited.indexOf(id) >= 0 && byId[id]) ? withNewFields(byId[id], fd) : fd);
   });
   // 端末だけにある成分のうち、配布マスタに同じ名前の成分があるものは配布の方に一本化する（同じ薬が2つ並ばないように）
   var nm = function(x){ return String(x || '').normalize('NFKC').replace(/\s+/g, ''); };
