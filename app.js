@@ -31,6 +31,13 @@ const TOOLS = [
     icon: 'ointment',
   },
   {
+    href: 'https://kongo-check.wankocorocoro0217.workers.dev/',
+    category: '軟膏',
+    title: '軟膏混合チェック',
+    desc: '2剤の混合の可否を、本で確認して登録した結果から判定します。ログインと通信が必要です。',
+    icon: 'ointment',
+  },
+  {
     href: './dfconv/',
     category: '換算',
     title: '剤形変更 換算',
@@ -44,13 +51,7 @@ const TOOLS = [
     desc: '体重・年齢・処方量・製剤量の換算と用量監査をタイムアタックで反復練習します。',
     icon: 'drill',
   },
-  {
-    href: 'https://kongo-check.ここをサブドメインに.workers.dev/',
-    category: '軟膏',
-    title: '軟膏混合チェック',
-    desc: '2剤の混合の可否を、本で確認して登録した結果から判定します。ログインと通信が必要です。',
-    icon: 'ointment',
-  },
+
   // ここに追加していく。例：
   // {
   //   href: './powder/',
