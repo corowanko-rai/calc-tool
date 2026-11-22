@@ -421,6 +421,122 @@
     out.appendChild(card);
   }
 
+  /* ---------------- 根拠と注意の図 ----------------
+     1回目の調剤日・投薬日数が入っていればその日付で、なければ「今日に28日分」の例で描く。
+     SVG も createElementNS で組み立てる（innerHTML は使わない）。 */
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function sv(tag, attrs, text) {
+    const e = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, String(attrs[k])); });
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+  function md(n) { const p = C.parts(n); return p.m + '/' + p.d; }
+  function svgRoot(h, label) {
+    const r = sv('svg', { viewBox: '0 0 340 ' + h, role: 'img', 'aria-label': label });
+    r.appendChild(sv('title', null, label));
+    return r;
+  }
+  function txt(x, y, cls, t, anchor) {
+    return sv('text', { x: x, y: y, class: cls, 'text-anchor': anchor || 'middle', 'dominant-baseline': 'central' }, t);
+  }
+  function bracket(x1, x2, y, up) {
+    const d = up ? 4 : -4;   // up: 端が下向き（上に括弧）
+    return sv('path', { class: 'br', d: 'M' + x1 + ' ' + (y + d) + ' L' + x1 + ' ' + y + ' L' + x2 + ' ' + y + ' L' + x2 + ' ' + (y + d) });
+  }
+
+  // 図1：日付の数え方（調剤日＝0日目 … N日目＝次回調剤予定日）
+  function figCount(date, N) {
+    const svg = svgRoot(246, md(date) + 'に' + N + '日分を調剤したときの日付の数え方。' + md(date + N) + 'が次回調剤予定日');
+    svg.appendChild(txt(20, 16, 'fs', '調剤日を0日目、翌日を1日目と数える', 'start'));
+    const slots = N <= 7 ? Array.from({ length: N + 1 }, function (_, i) { return i; }) : [0, 1, 2, 3, null, N - 2, N - 1, N];
+    const W = 34, S = slots.length;
+    const gap = S > 1 ? (300 - S * W) / (S - 1) : 0;
+    const xOf = {};
+    slots.forEach(function (k, i) {
+      const x = 20 + i * (W + gap);
+      if (k === null) { svg.appendChild(txt(x + W / 2, 45, 'fn', '…')); return; }
+      xOf[k] = x;
+      const cls = k === 0 ? 'cell-d' : k === N ? 'cell-s' : 'cell';
+      svg.appendChild(sv('rect', { x: x, y: 30, width: W, height: 30, rx: 4, class: cls }));
+      svg.appendChild(txt(x + W / 2, 45, 'fn' + (k === N ? ' w' : ''), String(k)));
+    });
+    const shown = [];
+    [0, 1, N - 1, N].forEach(function (k) { if (k >= 0 && k <= N && shown.indexOf(k) < 0 && xOf[k] !== undefined) shown.push(k); });
+    shown.forEach(function (k) {
+      svg.appendChild(txt(xOf[k] + W / 2, 76, 'fs', md(date + k)));
+      if (k === 0) svg.appendChild(txt(xOf[k] + W / 2, 92, 'fs', '調剤日'));
+      if (k === N) svg.appendChild(txt(xOf[k] + W / 2, 92, 'fs', '予定日'));
+    });
+    // 1日目〜N日目
+    const a1 = xOf[1], a2 = xOf[N] + W;
+    svg.appendChild(bracket(a1, a2, 110, false));
+    svg.appendChild(txt((a1 + a2) / 2, 124, 'fs', N > 1 ? '1日目〜' + N + '日目＝' + N + '日分' : '1日目＝1日分'));
+    // 当日から飲んだ場合
+    const b1 = xOf[0], b2 = xOf[N - 1] + W;
+    svg.appendChild(bracket(b1, b2, 146, false));
+    svg.appendChild(txt((b1 + b2) / 2, 160, 'fs', '当日から飲めば' + md(date + N - 1) + 'に飲み切る'));
+    svg.appendChild(sv('rect', { x: 20, y: 178, width: 300, height: 56, rx: 8, class: 'fbox' }));
+    svg.appendChild(txt(170, 196, 'fb', '次回調剤予定日＝調剤日＋投薬日数'));
+    svg.appendChild(txt(170, 218, 'fc', md(date) + ' ＋ ' + N + '日 ＝ ' + md(date + N)));
+    return svg;
+  }
+
+  // 図2：調剤できる期間（予定日の前後7日）と、総使用回数ぶんの流れ
+  function figWindow(date, N, uses) {
+    const sched = date + N, from = sched - C.RULE.WINDOW_DAYS, to = sched + C.RULE.WINDOW_DAYS;
+    const svg = svgRoot(296, '2回目に調剤できる期間は' + md(from) + 'から' + md(to) + 'まで。' + uses + '回の流れ');
+    svg.appendChild(txt(20, 14, 'ft', '2回目に調剤できる期間', 'start'));
+    svg.appendChild(txt(172, 38, 'fs', '前後7日＝15日間（予定日を含む）'));
+    svg.appendChild(bracket(52, 292, 50, true));
+    svg.appendChild(sv('rect', { x: 20, y: 58, width: 26, height: 28, rx: 4, class: 'out' }));
+    svg.appendChild(txt(33, 72, 'fn', '×'));
+    for (let i = 0; i < 15; i++) {
+      svg.appendChild(sv('rect', { x: 52 + i * 16, y: 58, width: 16, height: 28, class: i === 7 ? 'cell-s' : 'win' }));
+    }
+    svg.appendChild(sv('rect', { x: 298, y: 58, width: 22, height: 28, rx: 4, class: 'out' }));
+    svg.appendChild(txt(309, 72, 'fn', '×'));
+    [[60, from, '前7日'], [172, sched, '予定日'], [284, to, '後7日']].forEach(function (a) {
+      svg.appendChild(txt(a[0], 100, 'fs', md(a[1])));
+      svg.appendChild(txt(a[0], 116, 'fs', a[2]));
+    });
+    svg.appendChild(txt(20, 140, 'fs', '× 早ければ再来局、過ぎたら調剤不可', 'start'));
+
+    svg.appendChild(txt(20, 172, 'ft', uses + '回の流れ（毎回' + N + '日分、予定日どおり）', 'start'));
+    const x0 = 36, x1 = 304, seg = (x1 - x0) / uses;
+    const pts = [];
+    for (let k = 0; k <= uses; k++) pts.push(x0 + k * seg);
+    svg.appendChild(sv('line', { x1: x0, y1: 214, x2: x1, y2: 214, class: 'ln' }));
+    const half = Math.min(seg * C.RULE.WINDOW_DAYS / N, seg * 0.45);
+    for (let k = 1; k < uses; k++) svg.appendChild(sv('rect', { x: pts[k] - half, y: 206, width: half * 2, height: 16, rx: 3, class: 'win' }));
+    pts.forEach(function (x, k) {
+      const last = k === uses;
+      svg.appendChild(sv('circle', { cx: x, cy: 214, r: 5, class: (k === 0 || last) ? 'pt-g' : 'pt-s' }));
+      svg.appendChild(txt(x, 194, 'fs', last ? '終了' : (k + 1) + '回目'));
+      svg.appendChild(txt(x, 238, 'fs', md(date + k * N)));
+      svg.appendChild(txt(x, 254, 'fs', k === 0 ? '調剤日' : last ? '受診目安' : '±7日'));
+      if (!last) svg.appendChild(txt(x + seg / 2, 194, 'fs', '+' + N + '日'));
+    });
+    svg.appendChild(txt(20, 280, 'fs', uses === 3 ? '2回目がずれると、3回目以降も同じだけずれる' : '2回目の調剤日がずれると、終了日も同じだけずれる', 'start'));
+    return svg;
+  }
+
+  function renderFigures() {
+    if (!$('basisBox').open) return;
+    const d = $('f1Date').value ? C.parseISO($('f1Date').value) : null;
+    const n = C.parseDays($('f1Days').value, 1, MAX_RX_DAYS);
+    const useInput = d !== null && n !== null;
+    const date = useInput ? d : today();
+    const N = useInput ? n : 28;
+    const cap = useInput
+      ? '1回目に入力した日付で描いています（調剤日 ' + C.fmtShort(date) + '・' + N + '日分）。'
+      : '例：今日 ' + C.fmtShort(date) + ' に28日分を調剤した場合。1回目の調剤日と投薬日数を入れると、その日付で描きます。';
+    [['figCount', figCount(date, N)], ['figWindow', figWindow(date, N, state.uses)]].forEach(function (f) {
+      const host = $(f[0]);
+      host.replaceChildren(f[1], el('div', 'cap', cap));
+    });
+  }
+
   /* ---------------- 部品の組み立て ---------------- */
   function seg(host, items, get, set) {
     host.replaceChildren();
@@ -451,6 +567,7 @@
   function renderAll() {
     refreshChips();
     if (state.tab === 'refill') renderRefill(); else renderDays();
+    renderFigures();
   }
 
   seg($('usesSeg'), [{ v: 2, label: '2回' }, { v: 3, label: '3回' }], function () { return state.uses; },
@@ -485,6 +602,7 @@
     inp.addEventListener('change', renderAll);
   });
   $('f1Issue').addEventListener('toggle', renderAll);
+  $('basisBox').addEventListener('toggle', renderFigures);
 
   // タブ
   function setTab(t) {

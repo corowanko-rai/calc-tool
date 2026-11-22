@@ -1,7 +1,7 @@
 /* リフィル・日数計算  Service Worker（オフライン起動用）
    - refill フォルダ内のファイルだけをキャッシュする（他アプリのキャッシュには触れない） */
 'use strict';
-const VERSION = 'refill-v1.0.0';
+const VERSION = 'refill-v1.1.0';
 const SHELL = [
   './', './index.html', './style.css', './core.js', './app.js', './manifest.json',
   './icon-192.png', './icon-512.png', './icon-192-maskable.png', './icon-512-maskable.png', './apple-touch-icon.png'

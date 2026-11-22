@@ -191,6 +191,28 @@ input.bad{border-color:var(--warn);background:var(--warn-soft);}
 .toggle{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13.5px;cursor:pointer;}
 .toggle input{width:20px;height:20px;accent-color:var(--accent);flex:none;margin:0;}
 
+/* 根拠と注意の図（日付は1回目の入力に連動） */
+.fig{margin:6px 0 12px;}
+.fig svg{display:block;width:100%;height:auto;}
+.fig text{font-family:inherit;}
+.fig .ft{font-size:13px;font-weight:700;fill:var(--accent-deep);}
+.fig .fs{font-size:12px;fill:var(--ink-soft);}
+.fig .fn{font-size:14px;font-weight:700;fill:var(--ink);}
+.fig .fn.w{fill:#fff;}
+.fig .fb{font-size:13.5px;font-weight:700;fill:var(--accent-deep);}
+.fig .fc{font-size:12.5px;fill:var(--accent-deep);}
+.fig .cell{fill:#fff;stroke:var(--line);}
+.fig .cell-d{fill:#f1ede3;stroke:#cfc6b0;}
+.fig .cell-s{fill:var(--accent);stroke:var(--accent);}
+.fig .win{fill:var(--accent-soft);stroke:#bcdccf;}
+.fig .out{fill:#faf9f5;stroke:var(--line);}
+.fig .br{fill:none;stroke:var(--mute);stroke-width:1;}
+.fig .ln{stroke:var(--mute);stroke-width:1;}
+.fig .pt-g{fill:#fff;stroke:var(--ink-soft);stroke-width:1.5;}
+.fig .pt-s{fill:var(--accent);stroke:var(--accent);}
+.fig .fbox{fill:var(--accent-soft);stroke:#bcdccf;}
+.fig .cap{font-size:11.5px;color:var(--ink-soft);margin-top:4px;line-height:1.5;}
+
 footer{font-size:11.5px;color:var(--mute);text-align:center;margin-top:16px;line-height:1.7;}
 
 @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
