@@ -39,7 +39,7 @@
     src: 'written',
     mode: 'after'
   };
-  function save() { lsSet(STORE_KEY, JSON.stringify({ tab: state.tab, closed: state.closed })); }
+  function save() { lsSet(STORE_KEY, JSON.stringify({ tab: state.tab, closed: plainClosed(state.closed) })); }
 
   /* ---------------- 入力の読み取り ---------------- */
   function today() { return C.todayLocal(new Date()); }
@@ -391,7 +391,8 @@
       card.appendChild(kv('終了日', dateNode(b)));
       if (hasClosed()) {
         const lo = Math.min(a, b), hi = Math.max(a, b);
-        card.appendChild(kv('来局できる日', C.openDays(lo, hi, state.closed).length + '日', '両端を含め、休業日を除いた日数'));
+        if (hi - lo <= 3660) card.appendChild(kv('来局できる日', C.openDays(lo, hi, state.closed).length + '日', '両端を含め、休業日を除いた日数'));
+        else card.appendChild(kv('来局できる日', '—', '10年を超える期間は数えません'));
       }
       out.appendChild(card);
       return;
@@ -692,34 +693,129 @@
     });
   });
 
-  // 休業日の設定
+  // 休業日の設定（state.closed は C.normalizeClosed で検査・整形したもの）
+  function plainClosed(c) {
+    return { weekdays: c.weekdays.slice(), holidays: c.holidays, yearEnd: c.yearEnd,
+      yearEndFrom: { m: c.yearEndFrom.m, d: c.yearEndFrom.d }, yearEndTo: { m: c.yearEndTo.m, d: c.yearEndTo.d },
+      extra: c.extra.map(function (e) { return { from: e.from, to: e.to }; }) };
+  }
+  function updateClosed(patch) {
+    const next = plainClosed(state.closed);
+    Object.keys(patch).forEach(function (k) { next[k] = patch[k]; });
+    state.closed = C.normalizeClosed(next);
+    save(); refreshClosedUI(); renderAll();
+  }
+  function mdText(o) { return o.m + '/' + o.d; }
   function closedStateText() {
     const s = state.closed, parts = [];
     s.weekdays.forEach(function (on, i) { if (on) parts.push(C.WEEK[i]); });
     const list = [];
     if (parts.length) list.push(parts.join('・') + '曜');
     if (s.holidays) list.push('祝日');
-    if (s.yearEnd) list.push('年末年始');
+    if (s.yearEnd) list.push('年末年始（' + mdText(s.yearEndFrom) + '〜' + mdText(s.yearEndTo) + '）');
+    if (s.extra.length) list.push('臨時休業' + s.extra.length + '件');
     return list.length ? list.join('／') : '未設定';
   }
+  const MDAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function fillSelect(sel, from, to, value) {
+    if (sel.options.length !== to - from + 1) {
+      sel.replaceChildren();
+      for (let v = from; v <= to; v++) { const o = el('option', null, String(v)); o.value = String(v); sel.appendChild(o); }
+    }
+    sel.value = String(value);
+  }
+  function refreshYearEndUI() {
+    const f = state.closed.yearEndFrom, t = state.closed.yearEndTo;
+    fillSelect($('yeFromM'), 1, 12, f.m); fillSelect($('yeFromD'), 1, MDAYS[f.m - 1], f.d);
+    fillSelect($('yeToM'), 1, 12, t.m); fillSelect($('yeToD'), 1, MDAYS[t.m - 1], t.d);
+    $('yeRow').classList.toggle('off', !state.closed.yearEnd);
+  }
+  function onYearEndChange(which) {
+    const mSel = $(which === 'from' ? 'yeFromM' : 'yeToM'), dSel = $(which === 'from' ? 'yeFromD' : 'yeToD');
+    const m = parseInt(mSel.value, 10);
+    let d = parseInt(dSel.value, 10);
+    if (d > MDAYS[m - 1]) d = MDAYS[m - 1];       // 月を変えて日がはみ出したら月末にそろえる
+    const o = { m: m, d: d };
+    if (!C.validMD(o)) return;
+    const patch = {};
+    patch[which === 'from' ? 'yearEndFrom' : 'yearEndTo'] = o;
+    if (!state.closed.yearEnd) patch.yearEnd = true;  // 期間をいじったら「休み」をオンにする
+    updateClosed(patch);
+  }
+  ['yeFromM', 'yeFromD'].forEach(function (id) { $(id).addEventListener('change', function () { onYearEndChange('from'); }); });
+  ['yeToM', 'yeToD'].forEach(function (id) { $(id).addEventListener('change', function () { onYearEndChange('to'); }); });
+
+  function rangeText(e) {
+    const a = C.parseISO(e.from), b = C.parseISO(e.to);
+    if (a === b) return C.fmtLong(a);
+    return C.fmtLong(a) + ' 〜 ' + C.fmtShort(b);
+  }
+  function refreshExtraUI() {
+    const list = $('exList');
+    list.replaceChildren();
+    const t = today();
+    let past = 0;
+    if (!state.closed.extra.length) list.appendChild(el('li', 'empty', 'まだありません'));
+    state.closed.extra.forEach(function (e, i) {
+      const a = C.parseISO(e.from), b = C.parseISO(e.to);
+      const isPast = b < t;
+      if (isPast) past++;
+      const li = el('li', isPast ? 'past' : null);
+      const d = el('span', 'd', rangeText(e));
+      d.appendChild(el('small', null, (b - a + 1) + '日間' + (isPast ? '・過ぎた日' : '')));
+      const del = el('button', null, '削除');
+      del.type = 'button';
+      del.setAttribute('aria-label', rangeText(e) + ' の臨時休業日を削除');
+      del.addEventListener('click', function () {
+        const extra = state.closed.extra.filter(function (_, j) { return j !== i; });
+        updateClosed({ extra: extra });
+      });
+      add(li, d, del);
+      list.appendChild(li);
+    });
+    $('exClearPast').hidden = past === 0;
+  }
+  function showErr(id, msg) { const e = $(id); e.textContent = msg || ''; e.hidden = !msg; }
+  $('exAdd').addEventListener('click', function () {
+    const rawF = $('exFrom').value, rawT = $('exTo').value;
+    const f = rawF ? C.parseISO(rawF) : null;
+    const tt = rawT ? C.parseISO(rawT) : null;
+    if (rawT && tt === null) { showErr('exErr', '終了日が正しくありません'); return; }
+    const r = C.checkExtra(f, tt);
+    if (typeof r === 'string') { showErr('exErr', r); return; }
+    if (state.closed.extra.length >= C.MAX_EXTRA) { showErr('exErr', '臨時休業日は' + C.MAX_EXTRA + '件までです。過ぎた日を消してください'); return; }
+    const iso = { from: C.toISO(r.from), to: C.toISO(r.to) };
+    if (state.closed.extra.some(function (e) { return e.from === iso.from && e.to === iso.to; })) { showErr('exErr', 'すでに追加されています'); return; }
+    showErr('exErr', '');
+    $('exFrom').value = ''; $('exTo').value = '';
+    updateClosed({ extra: state.closed.extra.concat([iso]) });
+  });
+  $('exClearPast').addEventListener('click', function () {
+    const t = today();
+    updateClosed({ extra: state.closed.extra.filter(function (e) { return C.parseISO(e.to) >= t; }) });
+  });
+
   function refreshClosedUI() {
     Array.prototype.forEach.call($('wkChips').children, function (b, i) { b.setAttribute('aria-pressed', state.closed.weekdays[i] ? 'true' : 'false'); });
     $('clHol').checked = state.closed.holidays;
     $('clYearEnd').checked = state.closed.yearEnd;
     $('closedState').textContent = closedStateText();
+    refreshYearEndUI();
+    refreshExtraUI();
   }
   C.WEEK.forEach(function (w, i) {
     const b = el('button', 'chip', w);
     b.type = 'button';
     b.setAttribute('aria-label', w + '曜日を定休にする');
     b.addEventListener('click', function () {
-      state.closed.weekdays[i] = !state.closed.weekdays[i];
-      save(); refreshClosedUI(); renderAll();
+      const wk = state.closed.weekdays.slice();
+      wk[i] = !wk[i];
+      updateClosed({ weekdays: wk });
     });
     $('wkChips').appendChild(b);
   });
-  $('clHol').addEventListener('change', function () { state.closed.holidays = $('clHol').checked; save(); refreshClosedUI(); renderAll(); });
-  $('clYearEnd').addEventListener('change', function () { state.closed.yearEnd = $('clYearEnd').checked; save(); refreshClosedUI(); renderAll(); });
+  $('clHol').addEventListener('change', function () { updateClosed({ holidays: $('clHol').checked }); });
+  $('clYearEnd').addEventListener('change', function () { updateClosed({ yearEnd: $('clYearEnd').checked }); });
 
   /* ---------------- 初期値 ---------------- */
   const t0 = C.toISO(today());

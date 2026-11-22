@@ -155,30 +155,86 @@
   }
 
   /* ---------------- 休業日 ----------------
-     settings = { weekdays:[日..土 の7つの真偽], holidays:祝日休み, yearEnd:年末年始（12/29〜1/3）休み } */
+     settings = {
+       weekdays:[日..土 の7つの真偽], holidays:祝日休み,
+       yearEnd:年末年始休み, yearEndFrom:{m,d}, yearEndTo:{m,d}（毎年くり返す。12/29〜1/3 のように年をまたいでよい）,
+       extra:[{from:'YYYY-MM-DD', to:'YYYY-MM-DD'}]（臨時休業日。1日だけなら from と to が同じ）
+     }
+     端末に保存された値は信用せず、ここで形と範囲を検査してから使う。 */
+  const YEAR_END_DEFAULT = Object.freeze({ from: Object.freeze({ m: 12, d: 29 }), to: Object.freeze({ m: 1, d: 3 }) });
+  const MAX_EXTRA = 200;          // 臨時休業日の登録件数の上限
+  const MAX_EXTRA_SPAN = 366;     // 1件の期間の上限（日）
+  const MDAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function validMD(o) {
+    return !!o && Number.isInteger(o.m) && Number.isInteger(o.d) && o.m >= 1 && o.m <= 12 && o.d >= 1 && o.d <= MDAYS[o.m - 1];
+  }
+  // 臨時休業日1件の検査。正しければ {from, to}（通算日数）、だめなら理由の文字列
+  function checkExtra(fromN, toN) {
+    if (!inRange(fromN)) return '開始日を入れてください';
+    if (toN === null || toN === undefined) toN = fromN;
+    if (!inRange(toN)) return '終了日が正しくありません';
+    if (toN < fromN) return '終了日が開始日より前です';
+    if (toN - fromN + 1 > MAX_EXTRA_SPAN) return '1件の期間は' + MAX_EXTRA_SPAN + '日までです';
+    return { from: fromN, to: toN };
+  }
   function normalizeClosed(s) {
     const w = [false, false, false, false, false, false, false];
     if (s && Array.isArray(s.weekdays)) for (let i = 0; i < 7; i++) w[i] = s.weekdays[i] === true;
-    return { weekdays: w, holidays: !!(s && s.holidays), yearEnd: !!(s && s.yearEnd) };
+    const yf = s && validMD(s.yearEndFrom) ? { m: s.yearEndFrom.m, d: s.yearEndFrom.d } : { m: YEAR_END_DEFAULT.from.m, d: YEAR_END_DEFAULT.from.d };
+    const yt = s && validMD(s.yearEndTo) ? { m: s.yearEndTo.m, d: s.yearEndTo.d } : { m: YEAR_END_DEFAULT.to.m, d: YEAR_END_DEFAULT.to.d };
+    const ranges = [];
+    const seen = {};
+    if (s && Array.isArray(s.extra)) {
+      for (let i = 0; i < s.extra.length && ranges.length < MAX_EXTRA; i++) {
+        const e = s.extra[i];
+        if (!e || typeof e !== 'object') continue;
+        const r = checkExtra(parseISO(e.from), e.to ? parseISO(e.to) : null);
+        if (typeof r === 'string') continue;
+        const key = r.from + ':' + r.to;
+        if (seen[key]) continue;
+        seen[key] = true;
+        ranges.push(r);
+      }
+    }
+    ranges.sort(function (a, b) { return a.from - b.from || a.to - b.to; });
+    return {
+      weekdays: w, holidays: !!(s && s.holidays), yearEnd: !!(s && s.yearEnd),
+      yearEndFrom: yf, yearEndTo: yt,
+      extra: ranges.map(function (r) { return { from: toISO(r.from), to: toISO(r.to) }; }),
+      _ranges: ranges, _ok: true
+    };
   }
-  function isYearEnd(n) { const p = parts(n); return (p.m === 12 && p.d >= 29) || (p.m === 1 && p.d <= 3); }
+  function norm(settings) { return settings && settings._ok ? settings : normalizeClosed(settings); }
+  // 年末年始（毎年くり返す月日の範囲）に入るか。from が to より後なら年をまたぐ
+  function isYearEnd(n, from, to) {
+    const f = from || YEAR_END_DEFAULT.from, t = to || YEAR_END_DEFAULT.to;
+    const p = parts(n), k = p.m * 100 + p.d, kf = f.m * 100 + f.d, kt = t.m * 100 + t.d;
+    return kf <= kt ? (k >= kf && k <= kt) : (k >= kf || k <= kt);
+  }
+  function inExtra(n, s) {
+    const r = s._ranges;
+    for (let i = 0; i < r.length; i++) { if (r[i].from > n) break; if (n <= r[i].to) return true; }
+    return false;
+  }
   // 休業日なら理由（文字列）、営業日なら null
   function closedReason(n, settings) {
-    const s = normalizeClosed(settings);
+    const s = norm(settings);
     const reasons = [];
     if (s.weekdays[weekday(n)]) reasons.push(WEEK[weekday(n)] + '曜定休');
     if (s.holidays) { const h = holidayName(n); if (h) reasons.push(h); }
-    if (s.yearEnd && isYearEnd(n)) reasons.push('年末年始');
+    if (s.yearEnd && isYearEnd(n, s.yearEndFrom, s.yearEndTo)) reasons.push('年末年始');
+    if (s._ranges.length && inExtra(n, s)) reasons.push('臨時休業');
     return reasons.length ? reasons.join('・') : null;
   }
   function anyClosedSetting(settings) {
-    const s = normalizeClosed(settings);
-    return s.holidays || s.yearEnd || s.weekdays.some(Boolean);
+    const s = norm(settings);
+    return s.holidays || s.yearEnd || s.weekdays.some(Boolean) || s._ranges.length > 0;
   }
   // from〜to（両端を含む）の営業日
   function openDays(from, to, settings) {
+    const s = norm(settings);
     const out = [];
-    for (let n = from; n <= to; n++) if (!closedReason(n, settings)) out.push(n);
+    for (let n = from; n <= to; n++) if (!closedReason(n, s)) out.push(n);
     return out;
   }
 
@@ -243,7 +299,8 @@
     dn: dn, parts: parts, weekday: weekday, toISO: toISO, parseISO: parseISO, parseDays: parseDays, inRange: inRange,
     todayLocal: todayLocal, wareki: wareki, fmtLong: fmtLong, fmtShort: fmtShort,
     holidayName: holidayName, holidaysOfYear: holidaysOfYear, holidaySupported: holidaySupported, shunbun: shunbun, shubun: shubun,
-    normalizeClosed: normalizeClosed, closedReason: closedReason, anyClosedSetting: anyClosedSetting, openDays: openDays, isYearEnd: isYearEnd,
+    normalizeClosed: normalizeClosed, closedReason: closedReason, anyClosedSetting: anyClosedSetting, openDays: openDays,
+    checkExtra: checkExtra, validMD: validMD, YEAR_END_DEFAULT: YEAR_END_DEFAULT, MAX_EXTRA: MAX_EXTRA, MAX_EXTRA_SPAN: MAX_EXTRA_SPAN, isYearEnd: isYearEnd,
     firstDeadline: firstDeadline, nextScheduled: nextScheduled, refillWindow: refillWindow, judgeVisit: judgeVisit, judgeFirst: judgeFirst, plan: plan,
     between: between, after: after, before: before, weeksDays: weeksDays
   };

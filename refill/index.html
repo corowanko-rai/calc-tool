@@ -95,7 +95,25 @@
     <div class="hint">設定すると、カレンダーで休業日に斜線を引き、期間内に来局できる日を数えます。調剤できる期間そのものは休業日でも変わりません。</div>
     <div class="row"><div class="lb">定休の曜日</div><div class="wk" id="wkChips"></div></div>
     <label class="toggle"><input type="checkbox" id="clHol">祝日・振替休日は休み</label>
-    <label class="toggle"><input type="checkbox" id="clYearEnd">年末年始（12/29〜1/3）は休み</label>
+    <label class="toggle"><input type="checkbox" id="clYearEnd">年末年始は休み（毎年くり返す）</label>
+    <div class="ye-row" id="yeRow">
+      <select id="yeFromM" aria-label="年末年始の開始 月"></select><span class="unit">月</span>
+      <select id="yeFromD" aria-label="年末年始の開始 日"></select><span class="unit">日 〜</span>
+      <select id="yeToM" aria-label="年末年始の終了 月"></select><span class="unit">月</span>
+      <select id="yeToD" aria-label="年末年始の終了 日"></select><span class="unit">日</span>
+    </div>
+    <div class="hint warn" id="yeErr" hidden></div>
+
+    <div class="ex-box">
+      <div class="ex-title">臨時休業日（日付を指定）</div>
+      <div class="row"><label class="lb" for="exFrom">日付</label><input type="date" id="exFrom" min="1900-01-01" max="2099-12-31"></div>
+      <div class="row"><label class="lb" for="exTo">終了日<br>（期間のとき）</label><input type="date" id="exTo" min="1900-01-01" max="2099-12-31"></div>
+      <div class="row ex-actions"><button type="button" class="today ex-add" id="exAdd">追加する</button></div>
+      <div class="hint warn" id="exErr" hidden></div>
+      <ul class="ex-list" id="exList"></ul>
+      <button type="button" class="ex-clear" id="exClearPast" hidden>過ぎた臨時休業日をまとめて消す</button>
+      <div class="hint">1日だけなら「日付」だけ、連休なら「終了日」も入れてください。今年だけ年末年始の日程が違う場合も、ここで追加できます。</div>
+    </div>
     <div class="hint">この設定だけを、この端末に保存します。</div>
   </details>
 
