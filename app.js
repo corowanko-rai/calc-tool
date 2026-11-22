@@ -45,6 +45,13 @@ const TOOLS = [
     icon: 'convert',
   },
   {
+    href: './refill/',
+    category: '日付',
+    title: 'リフィル・日数計算',
+    desc: 'リフィル処方箋の次回調剤予定日・調剤できる期間・受付の可否と、日付の間の日数・〇日後・〇日前を計算します。',
+    icon: 'calendar',
+  },
+  {
     href: './drill/',
     category: '練習',
     title: '処方監査ドリル',
@@ -72,6 +79,7 @@ const ICONS = {
   injection: '<path d="m17.5 3.5 3 3M14 7l6 6M4 20l3.2-.6a2 2 0 0 0 1.06-.56L18.2 8.9a1.5 1.5 0 0 0 0-2.12l-1-1a1.5 1.5 0 0 0-2.12 0L5.16 15.74a2 2 0 0 0-.56 1.06L4 20Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   convert: '<path d="M4 9h13.5M14.5 5.8 17.8 9l-3.3 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 15H6.5M9.5 11.8 6.2 15l3.3 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   drill: '<circle cx="12" cy="13.5" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 3.5h4M12 3.5v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m9.2 13.6 2 2 3.8-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m17.6 7.4 1.3-1.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  calendar: '<rect x="4" y="5.5" width="16" height="15" rx="2.2" stroke="currentColor" stroke-width="1.6"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14.7 16.4a2.8 2.8 0 1 1-.3-3.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14.6 11.5v1.8h-1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
   default: '<rect x="4.5" y="3.5" width="15" height="17" rx="2.2" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h8M8 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
 };
 

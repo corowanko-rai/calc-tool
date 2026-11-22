@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<!-- 自分のオリジンのファイル以外は読み込まない。画面への文字列の直接書き込み（innerHTML等）も禁止（Trusted Types） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'; trusted-types refill-sw">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a4a40">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="リフィル日数">
+<title>リフィル・日数計算</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script src="core.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="mark"></span>リフィル・日数計算<small>Refill &amp; Days</small></h1>
+
+  <div class="tabs" role="tablist" aria-label="計算の種類">
+    <button type="button" role="tab" id="tabRefill" aria-controls="paneRefill" aria-selected="true">リフィル処方箋</button>
+    <button type="button" role="tab" id="tabDays" aria-controls="paneDays" aria-selected="false">日数計算</button>
+  </div>
+
+  <!-- ======================= リフィル処方箋 ======================= -->
+  <section id="paneRefill" role="tabpanel" aria-labelledby="tabRefill">
+    <div class="card">
+      <span class="section-label">今回の調剤</span>
+      <div class="row"><div class="lb">総使用回数</div><div class="seg" id="usesSeg"></div></div>
+      <div class="row"><div class="lb">今回</div><div class="seg" id="turnSeg"></div></div>
+    </div>
+
+    <!-- 1回目 -->
+    <div class="card" id="firstCard">
+      <span class="section-label">1回目の調剤</span>
+      <div class="row"><label class="lb" for="f1Date">調剤日</label><input type="date" id="f1Date" min="1900-01-01" max="2099-12-31"><button type="button" class="today" data-today="f1Date">今日</button></div>
+      <div class="row"><label class="lb" for="f1Days">投薬日数<br>（1回分）</label><input type="text" class="num" id="f1Days" inputmode="numeric" autocomplete="off" maxlength="5"><span class="unit">日分</span></div>
+      <div class="chips indent" data-days-for="f1Days"></div>
+      <details class="sub" id="f1Issue">
+        <summary>処方箋の使用期間を確かめる（任意）</summary>
+        <div class="row"><label class="lb" for="f1IssueDate">交付年月日</label><input type="date" id="f1IssueDate" min="1900-01-01" max="2099-12-31"></div>
+        <div class="row"><label class="lb" for="f1Limit">使用期間の<br>記載（任意）</label><input type="date" id="f1Limit" min="1900-01-01" max="2099-12-31"></div>
+        <div class="hint">使用期間の欄に日付がなければ、交付の日を含めて4日以内です。長期の旅行など特殊な事情で日付が書かれていれば、その日までです。</div>
+      </details>
+    </div>
+
+    <!-- 2回目以降 -->
+    <div class="card" id="laterCard" hidden>
+      <span class="section-label" id="laterLabel">2回目の調剤</span>
+      <div class="row"><div class="lb">予定日の確認</div><div class="seg" id="srcSeg"></div></div>
+      <div id="srcWritten">
+        <div class="row"><label class="lb" for="lSched">記載の次回<br>調剤予定日</label><input type="date" id="lSched" min="1900-01-01" max="2099-12-31"></div>
+      </div>
+      <div id="srcCalc" hidden>
+        <div class="row"><label class="lb" for="lPrev">前回調剤日</label><input type="date" id="lPrev" min="1900-01-01" max="2099-12-31"></div>
+        <div class="row"><label class="lb" for="lPrevDays">前回の<br>投薬日数</label><input type="text" class="num" id="lPrevDays" inputmode="numeric" autocomplete="off" maxlength="5"><span class="unit">日分</span></div>
+        <div class="chips indent" data-days-for="lPrevDays"></div>
+      </div>
+      <div class="row"><label class="lb" for="lVisit">来局日</label><input type="date" id="lVisit" min="1900-01-01" max="2099-12-31"><button type="button" class="today" data-today="lVisit">今日</button></div>
+      <div class="row"><label class="lb" for="lDays">今回の<br>投薬日数</label><input type="text" class="num" id="lDays" inputmode="numeric" autocomplete="off" maxlength="5"><span class="unit">日分</span></div>
+      <div class="chips indent" data-days-for="lDays"></div>
+      <div class="hint" id="lDaysHint">次の予定日と、最後の分の投薬期間が終わる日の計算に使います。</div>
+    </div>
+
+    <div id="refillOut" aria-live="polite"></div>
+  </section>
+
+  <!-- ======================= 日数計算 ======================= -->
+  <section id="paneDays" role="tabpanel" aria-labelledby="tabDays" hidden>
+    <div class="card">
+      <div class="seg" id="modeSeg"></div>
+      <div id="modeBetween" class="mode-body">
+        <div class="row"><label class="lb" for="dFrom">開始日</label><input type="date" id="dFrom" min="1900-01-01" max="2099-12-31"><button type="button" class="today" data-today="dFrom">今日</button></div>
+        <div class="row"><label class="lb" for="dTo">終了日</label><input type="date" id="dTo" min="1900-01-01" max="2099-12-31"><button type="button" class="today" data-today="dTo">今日</button></div>
+      </div>
+      <div id="modeShift" class="mode-body" hidden>
+        <div class="row"><label class="lb" for="dBase">基準日</label><input type="date" id="dBase" min="1900-01-01" max="2099-12-31"><button type="button" class="today" data-today="dBase">今日</button></div>
+        <div class="row"><label class="lb" for="dN">日数</label><input type="text" class="num" id="dN" inputmode="numeric" autocomplete="off" maxlength="5"><span class="unit">日</span></div>
+        <div class="chips indent" data-days-for="dN"></div>
+      </div>
+    </div>
+    <div id="daysOut" aria-live="polite"></div>
+  </section>
+
+  <!-- ======================= 共通：休業日・根拠 ======================= -->
+  <details class="card basis" id="closedBox">
+    <summary><span class="section-label">休業日の設定</span><span class="state" id="closedState"></span></summary>
+    <div class="hint">設定すると、カレンダーで休業日に斜線を引き、期間内に来局できる日を数えます。調剤できる期間そのものは休業日でも変わりません。</div>
+    <div class="row"><div class="lb">定休の曜日</div><div class="wk" id="wkChips"></div></div>
+    <label class="toggle"><input type="checkbox" id="clHol">祝日・振替休日は休み</label>
+    <label class="toggle"><input type="checkbox" id="clYearEnd">年末年始（12/29〜1/3）は休み</label>
+    <div class="hint">この設定だけを、この端末に保存します。</div>
+  </details>
+
+  <details class="card basis" id="basisBox">
+    <summary><span class="section-label">根拠と注意</span></summary>
+
+    <h3>リフィル処方箋で調剤できる期間</h3>
+    <ul>
+      <li><b>1回目</b>：通常の処方箋と同じく、処方箋の使用期間内。使用期間の記載がなければ、交付の日を含めて4日以内。</li>
+      <li><b>2回目以降</b>：前回の調剤日を起点とし、その回の投薬期間を経過する日が「次回調剤予定日」。調剤できるのはその前後7日以内。</li>
+      <li>例：次回調剤予定日が6月13日なら、6月6日〜6月20日（予定日を含めて15日間）。</li>
+      <li>期間外に受け付けた場合は調剤できない。期間より前に来局した患者には再来局を求める。</li>
+      <li>服薬を終える前に次の調剤を受けられるよう、次回調剤予定日までの来局が望ましいと患者に伝える。</li>
+    </ul>
+    <p class="src">出典：疑義解釈資料の送付について（その1）令和4年3月31日 事務連絡 問7・問10／診療報酬の算定方法の一部改正に伴う実施上の留意事項について（令和8年3月5日 保医発0305第6号）調剤点数表 通則／保険医療機関及び保険医療養担当規則 第20条第3号ロ</p>
+
+    <h3>このツールでの日付の数え方</h3>
+    <ul>
+      <li>次回調剤予定日＝前回の調剤日＋投薬日数（例：5月1日に30日分→5月31日）。調剤日を0日目、翌日を1日目として数える方法で、上の6月13日の例とも合います。</li>
+      <li>「全体の予定」の3回目以降は、前の回を予定日どおりに調剤した場合の日付です。前の回を早めたり遅らせたりすると、同じ日数だけずれます（その幅も表示します）。</li>
+      <li>春分の日・秋分の日は、毎年2月の官報で翌年の日付が正式に決まります。このツールは計算式で求めています（2026年・2027年は内閣府の公表と一致することを確認済み）。祝日の表示は2007〜2099年です。</li>
+    </ul>
+
+    <h3>調剤の前に確かめること</h3>
+    <ul>
+      <li>総使用回数の上限は3回。処方箋の「リフィル可」欄の✓と回数を確かめる。</li>
+      <li>リフィル処方箋にできない薬：投薬量に限度が定められている医薬品（新医薬品・麻薬・向精神薬など）と、鎮痛・消炎の効能・効果をもつ貼付剤（麻薬・向精神薬であるものと、専ら皮膚疾患に用いるものを除く）。</li>
+      <li>服薬状況などからリフィル処方箋での調剤が不適切と判断したときは、調剤せずに受診を勧め、処方医に速やかに情報提供する。</li>
+      <li>1回目・2回目（3回の場合）は、調剤日と次回調剤予定日を所定の欄に書き、薬局名と薬剤師名を余白か裏面に書いて、処方箋を患者に返す。写しは調剤録と一緒に、その調剤の終了日から3年間保管する。最後の回は調剤済処方箋として保管する。</li>
+      <li>予定の時期に来局がなければ電話などで状況を確かめ、連絡がつかないときは必要に応じて処方医に情報提供する。別の薬局で次の調剤を受ける予定なら、調剤の状況などを伝えるか、記録を患者に渡す。</li>
+    </ul>
+    <p class="src">出典：保険調剤の理解のために（令和8年度）厚生労働省保険局医療課医療指導監査室／疑義解釈（その1）問8／令和8年度診療報酬改定</p>
+
+    <h3>国の通知に明記がない点</h3>
+    <ul>
+      <li>残薬調整で日数を減らした場合の次回調剤予定日の扱い。京都府薬剤師会の研修会Q&amp;Aでは「残薬調整をしても次回の調剤予定日は変わらない」と回答しています（国の通知ではありません）。</li>
+      <li>休薬期間のある薬（例：21日服用・7日休薬）は、休薬期間を含めて投薬期間とするのが通常の考え方です。医師の意図がはっきりしないときは疑義照会で確かめます（同Q&amp;A）。</li>
+    </ul>
+    <p class="src">このツールは計算の補助です。最終的な判断は、処方箋の記載と最新の通知に基づいて薬剤師が行ってください。</p>
+  </details>
+
+  <footer>入力した日付は保存しません（休業日の設定だけをこの端末に保存します）。<br>一度開けば、オフラインでも起動できます。</footer>
+</div>
+</body>
+</html>
