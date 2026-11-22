@@ -17,6 +17,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
 <script src="core.js" defer></script>
+<script src="sources.js" defer></script>
 <script src="app.js" defer></script>
 </head>
 <body>
@@ -110,15 +111,25 @@
       <li>服薬を終える前に次の調剤を受けられるよう、次回調剤予定日までの来局が望ましいと患者に伝える。</li>
     </ul>
     <div class="fig" id="figWindow"></div>
-    <p class="src">出典：疑義解釈資料の送付について（その1）令和4年3月31日 事務連絡 問7・問10／診療報酬の算定方法の一部改正に伴う実施上の留意事項について（令和8年3月5日 保医発0305第6号）調剤点数表 通則／保険医療機関及び保険医療養担当規則 第20条第3号ロ</p>
+    <div class="src-list">
+      <span class="src-k">出典（押すと該当部分を表示）</span>
+      <button type="button" class="src-btn" data-src="ryotan" data-focus="i">療担規則 第20条第3号イ・ロ</button>
+      <button type="button" class="src-btn" data-src="ryuui" data-focus="n4">留意事項通知（令和8年）通則4</button>
+      <button type="button" class="src-btn" data-src="gigi" data-focus="q7">疑義解釈（その1）問7・問10</button>
+    </div>
 
     <h3>このツールでの日付の数え方</h3>
     <div class="fig" id="figCount"></div>
     <ul>
-      <li>次回調剤予定日＝前回の調剤日＋投薬日数（例：5月1日に30日分→5月31日）。調剤日を0日目、翌日を1日目として数える方法で、上の6月13日の例とも合います。</li>
+      <li>次回調剤予定日＝前回の調剤日＋投薬日数（例：5月1日に30日分→5月31日）。通知の「前回の調剤日を起点とし、当該調剤に係る投薬期間を経過する日」を、調剤日を0日目、翌日を1日目として数えています。</li>
       <li>「全体の予定」の3回目以降は、前の回を予定日どおりに調剤した場合の日付です。前の回を早めたり遅らせたりすると、同じ日数だけずれます（その幅も表示します）。</li>
       <li>春分の日・秋分の日は、毎年2月の官報で翌年の日付が正式に決まります。このツールは計算式で求めています（2026年・2027年は内閣府の公表と一致することを確認済み）。祝日の表示は2007〜2099年です。</li>
     </ul>
+    <div class="src-list">
+      <span class="src-k">出典（押すと該当部分を表示）</span>
+      <button type="button" class="src-btn" data-src="ryuui" data-focus="n4">留意事項通知（令和8年）通則4</button>
+      <button type="button" class="src-btn" data-src="gigi" data-focus="q7">疑義解釈（その1）問7</button>
+    </div>
 
     <h3>調剤の前に確かめること</h3>
     <ul>
@@ -128,15 +139,38 @@
       <li>1回目・2回目（3回の場合）は、調剤日と次回調剤予定日を所定の欄に書き、薬局名と薬剤師名を余白か裏面に書いて、処方箋を患者に返す。写しは調剤録と一緒に、その調剤の終了日から3年間保管する。最後の回は調剤済処方箋として保管する。</li>
       <li>予定の時期に来局がなければ電話などで状況を確かめ、連絡がつかないときは必要に応じて処方医に情報提供する。別の薬局で次の調剤を受ける予定なら、調剤の状況などを伝えるか、記録を患者に渡す。</li>
     </ul>
-    <p class="src">出典：保険調剤の理解のために（令和8年度）厚生労働省保険局医療課医療指導監査室／疑義解釈（その1）問8／令和8年度診療報酬改定</p>
+    <div class="src-list">
+      <span class="src-k">出典（押すと該当部分を表示）</span>
+      <button type="button" class="src-btn" data-src="rikai" data-focus="p26a">保険調剤の理解のために（令和8年度）</button>
+      <button type="button" class="src-btn" data-src="ryotan" data-focus="ro">療担規則 第20条第3号ロ（3回まで）</button>
+      <button type="button" class="src-btn" data-src="ryuui" data-focus="n5">留意事項通知（令和8年）通則5</button>
+      <button type="button" class="src-btn" data-src="gigi" data-focus="q8">疑義解釈（その1）問8</button>
+    </div>
 
     <h3>国の通知に明記がない点</h3>
     <ul>
+      <li>次回調剤予定日の日付の計算例。通知は「投薬期間を経過する日を次回調剤予定日（実際に投薬が終了する日）」とするだけで、例はありません。このツールは調剤日＋投薬日数で計算しますが、調剤日を1日目と数えると1日早くなります。期間の最初の日や最後の日に来局したときは、処方箋の記載も確かめてください。</li>
       <li>残薬調整で日数を減らした場合の次回調剤予定日の扱い。京都府薬剤師会の研修会Q&amp;Aでは「残薬調整をしても次回の調剤予定日は変わらない」と回答しています（国の通知ではありません）。</li>
       <li>休薬期間のある薬（例：21日服用・7日休薬）は、休薬期間を含めて投薬期間とするのが通常の考え方です。医師の意図がはっきりしないときは疑義照会で確かめます（同Q&amp;A）。</li>
     </ul>
+    <div class="src-list">
+      <span class="src-k">出典（押すと該当部分を表示）</span>
+      <button type="button" class="src-btn" data-src="ryuui" data-focus="n4">留意事項通知（令和8年）通則4</button>
+      <button type="button" class="src-btn" data-src="kyoto" data-focus="zan">京都府薬剤師会 研修会Q&amp;A</button>
+    </div>
     <p class="src">このツールは計算の補助です。最終的な判断は、処方箋の記載と最新の通知に基づいて薬剤師が行ってください。</p>
   </details>
+
+  <dialog id="srcDialog" aria-labelledby="svTitle">
+    <div class="sv-head">
+      <div class="sv-titles">
+        <div class="sv-title" id="svTitle"></div>
+        <div class="sv-org" id="svOrg"></div>
+      </div>
+      <button type="button" class="sv-close" id="svClose" aria-label="閉じる">閉じる</button>
+    </div>
+    <div class="sv-body" id="svBody"></div>
+  </dialog>
 
   <footer>入力した日付は保存しません（休業日の設定だけをこの端末に保存します）。<br>一度開けば、オフラインでも起動できます。</footer>
 </div>

@@ -537,6 +537,65 @@
     });
   }
 
+  /* ---------------- 出典の抜粋（ハイライト付き） ----------------
+     sources.js の原文抜粋を、ダイアログに表示する。強調部分は <mark>。 */
+  function sourceUrl(src) {
+    let u = src.url;
+    if (!/^https:\/\//.test(u)) return null;          // 想定外のURLは出さない
+    if (src.textFragments && src.textFragments.length) {
+      u += '#:~:' + src.textFragments.map(function (f) { return 'text=' + encodeURIComponent(f); }).join('&');
+    } else if (src.page) {
+      u += '#page=' + src.page;
+    }
+    return u;
+  }
+  function openSource(key, focusId) {
+    const S = window.RefillSources && window.RefillSources[key];
+    if (!S) return;
+    const dlg = $('srcDialog');
+    $('svTitle').textContent = S.title;
+    $('svOrg').textContent = S.org;
+    const body = $('svBody');
+    body.replaceChildren();
+    body.appendChild(el('div', 'sv-where', '該当箇所：' + S.where + '（黄色は、このツールで付けた強調です）'));
+    let focusEl = null;
+    S.excerpts.forEach(function (ex) {
+      const box = el('div', 'sv-ex');
+      box.id = 'sv-' + ex.id;
+      box.appendChild(el('div', 'lb', ex.label));
+      if (ex.q) box.appendChild(el('div', 'q', ex.q));
+      const tx = el('div', 'tx');
+      ex.body.forEach(function (part) { tx.appendChild(part.hl ? el('mark', null, part.t) : document.createTextNode(part.t)); });
+      box.appendChild(tx);
+      if (ex.id === focusId) { box.classList.add('focus'); focusEl = box; }
+      body.appendChild(box);
+    });
+    if (S.note) body.appendChild(el('div', 'sv-note', S.note));
+    const url = sourceUrl(S);
+    if (url) {
+      const a = el('a', 'sv-link', S.linkLabel || '原文を開く');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      body.appendChild(a);
+    }
+    if (S.linkNote) body.appendChild(el('div', 'sv-note', S.linkNote));
+    body.appendChild(el('div', 'sv-legal', key === 'kyoto'
+      ? '出典を示した引用です。質問は要約しています。'
+      : '出典：' + S.credit + '（' + S.url + '）。原文から一部を抜き出し、強調を加えています（法令・通知は著作権法第13条により著作権の対象外。厚生労働省ホームページの利用規約に従って掲載）。'));
+    if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); }
+    else dlg.setAttribute('open', '');
+    dlg.scrollTop = 0;
+    if (focusEl) {
+      // 表示が確定してから、該当部分までスクロール
+      window.requestAnimationFrame(function () { focusEl.scrollIntoView({ block: 'start' }); });
+    }
+  }
+  function closeSource() {
+    const dlg = $('srcDialog');
+    if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open');
+  }
+
   /* ---------------- 部品の組み立て ---------------- */
   function seg(host, items, get, set) {
     host.replaceChildren();
@@ -603,6 +662,12 @@
   });
   $('f1Issue').addEventListener('toggle', renderAll);
   $('basisBox').addEventListener('toggle', renderFigures);
+  // 出典ボタン
+  document.querySelectorAll('.src-btn').forEach(function (b) {
+    b.addEventListener('click', function () { openSource(b.dataset.src, b.dataset.focus); });
+  });
+  $('svClose').addEventListener('click', closeSource);
+  $('srcDialog').addEventListener('click', function (e) { if (e.target === $('srcDialog')) closeSource(); });
 
   // タブ
   function setTab(t) {
